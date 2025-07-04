@@ -54,7 +54,7 @@ h1 {
 }
 
 .text-input, .number-input, .file-input {
-  width: 100%;
+  width: calc(100% - 28px);
   padding: 12px;
   border: 2px solid #ddd;
   border-radius: 8px;
@@ -180,6 +180,23 @@ h1 {
   font-weight: bold;
   position: relative;
   line-height: 1.2;
+  text-align: center;
+  display: inline-block;
+}
+
+.twemoji-preview {
+  display: block;
+  user-select: none;
+  filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+.emoji-fallback {
+  color: white;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+  user-select: none;
+  font-weight: bold;
+  position: relative;
+  line-height: 1;
   text-align: center;
   display: inline-block;
 }
@@ -400,10 +417,35 @@ h1 {
   align-items: center;
 }
 
-.emoji-display {
+.emoji-display-wrapper {
   flex: 1;
+  padding: 12px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
   background-color: #f8f9fa;
-  cursor: default;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+}
+
+.selected-emoji-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.selected-emoji-twemoji {
+  width: 24px;
+  height: 24px;
+}
+
+.selected-emoji-fallback {
+  font-size: 24px;
+}
+
+.emoji-placeholder {
+  color: #999;
+  font-style: italic;
 }
 
 .emoji-picker-button {
@@ -417,6 +459,14 @@ h1 {
   font-weight: bold;
   transition: transform 0.2s;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.button-emoji-twemoji {
+  width: 18px;
+  height: 18px;
 }
 
 .emoji-picker-button:hover {
@@ -577,6 +627,12 @@ h1 {
 
 .emoji-item:active {
   transform: scale(1.1);
+}
+
+.emoji-picker-twemoji {
+  width: 24px;
+  height: 24px;
+  display: block;
 }
 
 @media (max-width: 768px) {

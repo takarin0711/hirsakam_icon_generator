@@ -15,7 +15,7 @@ class HirsakamGenerator:
     def __init__(self, base_image_path="hirsakam.jpg"):
         self.base_image_path = base_image_path
         # 猫の顔の中心位置（画像を精密に測定）
-        self.face_center = (190, 115)
+        self.face_center = (260, 143)
     
     def load_base_image(self):
         """ベース画像を読み込む"""
@@ -226,7 +226,7 @@ class HirsakamGenerator:
             return self.add_emoji_to_image(image, emoji_char, position, 96)
     
     
-    def generate_with_emoji(self, emoji_char, position=(330, 180), size=250, output_path=None):
+    def generate_with_emoji(self, emoji_char, position=(260, 143), size=164, output_path=None):
         """絵文字を使用してコラ画像を生成"""
         image = self.load_base_image()
         
@@ -276,10 +276,10 @@ def main():
     parser.add_argument("--text", help="カスタムテキスト")
     parser.add_argument("--emoji", help="絵文字（例: 😍）")
     parser.add_argument("--output", help="出力ファイル名")
-    parser.add_argument("--x", type=int, default=50, help="テキストのX座標")
-    parser.add_argument("--y", type=int, default=50, help="テキストのY座標")
+    parser.add_argument("--x", type=int, default=260, help="テキスト/絵文字のX座標（絵文字のデフォルト: 260）")
+    parser.add_argument("--y", type=int, default=143, help="テキスト/絵文字のY座標（絵文字のデフォルト: 143）")
     parser.add_argument("--size", type=int, default=48, help="フォントサイズ")
-    parser.add_argument("--emoji-size", type=int, default=150, help="絵文字のサイズ")
+    parser.add_argument("--emoji-size", type=int, default=164, help="絵文字のサイズ")
     
     args = parser.parse_args()
     
@@ -306,7 +306,7 @@ def main():
             print("--emoji または --text を指定してください")
             print("使用方法:")
             print("  python hirsakam_generator.py --emoji 😍")
-            print("  python hirsakam_generator.py --emoji 😍 --emoji-size 250 --x 330 --y 180")
+            print("  python hirsakam_generator.py --emoji 😍 --emoji-size 164 --x 260 --y 143")
             print("  python hirsakam_generator.py --text 'カスタムテキスト'")
     
     except Exception as e:
