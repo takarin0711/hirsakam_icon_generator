@@ -1,94 +1,179 @@
-# Hirsakam コラ画像ジェネレーター
+# 🐱 Hirsakam Icon Generator
 
-hirsakam.jpgをベースにしたコラ画像を簡単に作成できるPythonツールです。
+Hirsakamの画像に絵文字やテキストを追加してコラ画像を生成するWebアプリケーションです。
 
-## 特徴
+## 📁 ディレクトリ構造
 
-- **動的絵文字機能**: Web上から絵文字画像を取得し、任意のサイズで猫の顔に重ねることが可能
-- **カスタムテキスト**: 任意のテキストでコラ画像を作成
-- **フォント調整**: テキストサイズ、位置、色のカスタマイズ
-- **縁取り文字**: 読みやすい黒縁文字を自動追加
-- **高品質絵文字**: Twitter Twemojiを使用した高解像度絵文字表示
-
-## インストール
-
-### 1. リポジトリをクローン
-```bash
-git clone <repository-url>
-cd hirsakam_icon
+```
+hirsakam_icon_generator/
+├── run.py                  # 実行スクリプト
+├── hirsakam.jpg           # デフォルトのベース画像
+├── output/                # 生成された画像の保存先
+├── temp_uploads/          # アップロード画像の一時保存
+├── backend/               # バックエンド（FastAPI）
+│   ├── app.py                  # Web API サーバー
+│   ├── hirsakam_icon_generator.py  # 画像生成エンジン
+│   └── requirements.txt        # Python依存関係
+├── frontend/              # フロントエンド（React）
+│   ├── src/
+│   ├── public/
+│   └── package.json
+└── venv/                  # Python仮想環境
 ```
 
-### 2. 仮想環境のセットアップ
+## 🚀 起動方法
+
+### 簡単起動（デフォルト）
+
 ```bash
-python3 -m venv venv
-source venv/bin/activate  # macOS/Linux
-# または
-venv\Scripts\activate     # Windows
-```
-
-### 3. 依存関係のインストール
-```bash
-pip install Pillow requests emoji
-```
-
-## 使用方法
-
-### 基本的な使い方
-
-仮想環境をアクティベートしてから実行してください：
-```bash
-source venv/bin/activate
-```
-
-### 絵文字を使用
-```bash
-# 基本的な絵文字コラ画像を生成
-python hirsakam_icon_generator.py --emoji 😍
-
-# 大きな絵文字で猫の顔の輪郭に合わせる
-python hirsakam_icon_generator.py --emoji 😍 --emoji-size 250 --x 330 --y 180
-
-# 様々な絵文字を試す
-python hirsakam_icon_generator.py --emoji 😂 --emoji-size 200 --x 320 --y 170
-python hirsakam_icon_generator.py --emoji 😭 --emoji-size 220 --x 325 --y 175
-python hirsakam_icon_generator.py --emoji 😎 --emoji-size 250 --x 330 --y 180
-python hirsakam_icon_generator.py --emoji 😴 --emoji-size 200 --x 315 --y 165
-```
-
-### カスタムテキストを使用
-```bash
-# 任意のテキストでコラ画像を生成
-python hirsakam_icon_generator.py --text "おはよう"
-
-# テキストの位置を指定
-python hirsakam_icon_generator.py --text "こんにちは" --x 100 --y 80
-
-# フォントサイズを変更
-python hirsakam_icon_generator.py --text "こんばんは" --size 60
+python3 run.py
 ```
 
 ### その他のオプション
-```bash
-# 出力ファイル名を指定
-python hirsakam_icon_generator.py --emoji 😍 --output my_emoji.jpg
 
-# ベース画像を変更
-python hirsakam_icon_generator.py --base another_image.jpg --emoji 😊
+```bash
+python3 run.py both      # 両方同時に起動（上と同じ）
+python3 run.py backend   # バックエンドのみ
+python3 run.py frontend  # フロントエンドのみ
+python3 run.py help      # ヘルプ表示
 ```
 
-## よく使われる絵文字とサイズの例
+## 🌐 アクセス先
+
+- **フロントエンド**: http://localhost:3000
+- **バックエンドAPI**: http://localhost:8000
+- **API ドキュメント**: http://localhost:8000/docs
+
+## ✨ 機能
+
+### Web UI版（推奨）
+1. **絵文字追加**: Slack風の絵文字ピッカーから選択
+2. **テキスト追加**: カスタムテキストと色の変更
+3. **インタラクティブプレビュー**: 
+   - ドラッグで位置調整
+   - 四隅のハンドルでサイズ調整
+   - マウスホイールでサイズ変更
+4. **カスタム画像**: 独自の画像をアップロード可能
+5. **ギャラリー**: 生成した画像の一覧表示とダウンロード
+
+### コマンドライン版
+- 高度な絵文字処理（Twitter Twemojiから高品質画像取得）
+- フォント調整とテキスト描画
+- バッチ処理に適している
+
+## 🛠️ セットアップ
+
+### 初回セットアップ
+
+1. **仮想環境作成**
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate  # macOS/Linux
+   # または
+   venv\Scripts\activate     # Windows
+   ```
+
+2. **依存関係のインストール**
+   ```bash
+   pip3 install -r backend/requirements.txt
+   cd frontend && npm install
+   ```
+
+### 手動起動（開発者向け）
+
+```bash
+# ターミナル1: バックエンド
+python3 run.py backend
+
+# ターミナル2: フロントエンド
+python3 run.py frontend
+```
+
+### 直接実行（上級者向け）
+
+```bash
+# バックエンド
+cd backend && python3 app.py
+
+# フロントエンド
+cd frontend && npm start
+```
+
+## 📝 要件
+
+- **Python 3.8+**
+- **Node.js 14+**
+- **npm または yarn**
+- **インターネット接続**（絵文字画像ダウンロード用）
+
+## 🎨 使い方
+
+### Web UI版
+1. `python3 run.py` でアプリケーションを起動
+2. ブラウザで http://localhost:3000 にアクセス
+3. テキストまたは絵文字を入力
+4. 「プレビュー」ボタンをクリック
+5. ドラッグして位置を調整
+6. 四隅の○をドラッグしてサイズ調整
+7. 「この位置で生成」をクリック
+8. 生成された画像をダウンロード
+
+### コマンドライン版
+
+#### 基本的な使い方
+```bash
+cd backend
+source ../venv/bin/activate  # 仮想環境をアクティベート
+```
+
+#### 絵文字を使用
+```bash
+# 基本的な絵文字コラ画像を生成
+python3 hirsakam_icon_generator.py --emoji 😍
+
+# 大きな絵文字で猫の顔の輪郭に合わせる
+python3 hirsakam_icon_generator.py --emoji 😍 --emoji-size 250 --x 330 --y 180
+
+# 様々な絵文字を試す
+python3 hirsakam_icon_generator.py --emoji 😂 --emoji-size 200 --x 320 --y 170
+python3 hirsakam_icon_generator.py --emoji 😭 --emoji-size 220 --x 325 --y 175
+python3 hirsakam_icon_generator.py --emoji 😎 --emoji-size 250 --x 330 --y 180
+```
+
+#### カスタムテキストを使用
+```bash
+# 任意のテキストでコラ画像を生成
+python3 hirsakam_icon_generator.py --text "おはよう"
+
+# テキストの位置を指定
+python3 hirsakam_icon_generator.py --text "こんにちは" --x 100 --y 80
+
+# フォントサイズを変更
+python3 hirsakam_icon_generator.py --text "こんばんは" --size 60
+```
+
+#### その他のオプション
+```bash
+# 出力ファイル名を指定
+python3 hirsakam_icon_generator.py --emoji 😍 --output my_emoji.jpg
+
+# ベース画像を変更
+python3 hirsakam_icon_generator.py --base another_image.jpg --emoji 😊
+```
+
+## 📊 よく使われる絵文字とサイズの例
 
 | 絵文字 | 推奨コマンド | 説明 |
 |-------|-------------|------|
-| 😍 | `python hirsakam_icon_generator.py --emoji 😍 --emoji-size 250 --x 330 --y 180` | ハート目の猫 |
-| 😂 | `python hirsakam_icon_generator.py --emoji 😂 --emoji-size 220 --x 325 --y 175` | 大笑いの猫 |
-| 😭 | `python hirsakam_icon_generator.py --emoji 😭 --emoji-size 230 --x 325 --y 175` | 大泣きの猫 |
-| 😎 | `python hirsakam_icon_generator.py --emoji 😎 --emoji-size 250 --x 330 --y 180` | クールな猫 |
-| 😴 | `python hirsakam_icon_generator.py --emoji 😴 --emoji-size 200 --x 315 --y 165` | 眠い猫 |
-| 🤔 | `python hirsakam_icon_generator.py --emoji 🤔 --emoji-size 220 --x 320 --y 170` | 考える猫 |
-| 😏 | `python hirsakam_icon_generator.py --emoji 😏 --emoji-size 240 --x 325 --y 175` | ニヤリとする猫 |
+| 😍 | `python3 hirsakam_icon_generator.py --emoji 😍 --emoji-size 250 --x 330 --y 180` | ハート目の猫 |
+| 😂 | `python3 hirsakam_icon_generator.py --emoji 😂 --emoji-size 220 --x 325 --y 175` | 大笑いの猫 |
+| 😭 | `python3 hirsakam_icon_generator.py --emoji 😭 --emoji-size 230 --x 325 --y 175` | 大泣きの猫 |
+| 😎 | `python3 hirsakam_icon_generator.py --emoji 😎 --emoji-size 250 --x 330 --y 180` | クールな猫 |
+| 😴 | `python3 hirsakam_icon_generator.py --emoji 😴 --emoji-size 200 --x 315 --y 165` | 眠い猫 |
+| 🤔 | `python3 hirsakam_icon_generator.py --emoji 🤔 --emoji-size 220 --x 320 --y 170` | 考える猫 |
+| 😏 | `python3 hirsakam_icon_generator.py --emoji 😏 --emoji-size 240 --x 325 --y 175` | ニヤリとする猫 |
 
-## コマンドライン引数
+## 🔧 コマンドライン引数
 
 | 引数 | 説明 | デフォルト値 |
 |------|------|-------------|
@@ -96,52 +181,34 @@ python hirsakam_icon_generator.py --base another_image.jpg --emoji 😊
 | `--emoji` | 絵文字（例: 😍） | - |
 | `--text` | カスタムテキスト | - |
 | `--output` | 出力ファイル名 | 自動生成 |
-| `--x` | X座標 | 50 (テキスト), 300 (絵文字) |
-| `--y` | Y座標 | 50 (テキスト), 155 (絵文字) |
+| `--x` | X座標 | 50 (テキスト), 330 (絵文字) |
+| `--y` | Y座標 | 50 (テキスト), 180 (絵文字) |
 | `--size` | フォントサイズ | 48 |
-| `--emoji-size` | 絵文字のサイズ（ピクセル） | 150 |
+| `--emoji-size` | 絵文字のサイズ（ピクセル） | 250 |
 
-## 出力
+## 📁 出力
 
 生成された画像は `output/` ディレクトリに保存されます。
 
-- 絵文字使用時: `output/hirsakam_emoji_{unicodeコード}.jpg`
-- カスタムテキスト使用時: `output/hirsakam_custom.jpg`
-- `--output` 指定時: 指定されたパス
+- **絵文字使用時**: `output/hirsakam_emoji_{unicodeコード}.jpg`
+- **カスタムテキスト使用時**: `output/hirsakam_custom.jpg`
+- **`--output` 指定時**: 指定されたパス
 
-## ファイル構成
+## 💡 ファイル構成の説明
 
-```
-hirsakam_icon/
-├── hirsakam.jpg                  # ベース画像
-├── hirsakam_icon_generator.py    # メインプログラム
-├── venv/                         # 仮想環境
-├── output/                       # 生成画像の出力先
-├── README.md                     # このファイル
-└── 既存のコラ画像...
-```
+### `app.py` vs `hirsakam_icon_generator.py`
 
-## 技術的な特徴
+- **`hirsakam_icon_generator.py`**: 画像生成の核となるエンジン
+  - Pillowを使った画像処理
+  - 絵文字・テキストの描画
+  - コマンドライン単体実行可能
+  
+- **`app.py`**: Web API サーバー
+  - FastAPIを使ったWebサーバー
+  - HTTP エンドポイント提供
+  - `hirsakam_icon_generator.py`を利用
 
-### 絵文字の動的取得
-- Twitter Twemojiから高品質な絵文字画像をダウンロード
-- 任意のサイズに拡大・縮小可能（フォントサイズの制限なし）
-- 透明背景でクリーンな合成
-
-### 位置調整のコツ
-- 猫の顔の中心付近: `--x 300 --y 155`
-- 猫の鼻あたり: `--x 330 --y 180`
-- 大きな絵文字（200px以上）の場合は、やや右下にずらすと自然
-
-## 動作環境
-
-- Python 3.7以上
-- Pillow (PIL) ライブラリ
-- requests ライブラリ
-- emoji ライブラリ
-- インターネット接続（絵文字画像のダウンロード用）
-
-## トラブルシューティング
+## 🛠️ トラブルシューティング
 
 ### 絵文字が表示されない
 ```bash
@@ -149,7 +216,7 @@ hirsakam_icon/
 ping raw.githubusercontent.com
 
 # requestsライブラリを再インストール
-pip install --upgrade requests
+pip3 install --upgrade requests
 ```
 
 ### フォントが表示されない
@@ -161,19 +228,29 @@ macOS以外の環境では、システムフォントのパスが異なる場合
 rm -rf venv
 python3 -m venv venv
 source venv/bin/activate
-pip install Pillow requests emoji
+pip3 install -r backend/requirements.txt
 ```
 
 ### 権限エラー
-ファイルの作成権限を確認してください：
 ```bash
+# ファイルの作成権限を確認
 chmod +w output/
 ```
 
-## カスタマイズ
+### ポートが使用中エラー
+```bash
+# ポートを使用しているプロセスを確認
+lsof -i :3000  # フロントエンド
+lsof -i :8000  # バックエンド
+
+# プロセスを終了（PIDを確認してから）
+kill -9 <PID>
+```
+
+## 🎨 カスタマイズ
 
 ### 猫の顔の中心位置の調整
-`hirsakam_icon_generator.py` の `face_center` 変数を編集することで、異なる画像に対応できます：
+`backend/hirsakam_icon_generator.py` の `face_center` 変数を編集：
 
 ```python
 # 猫の顔の中心位置（画像を精密に測定）
@@ -187,9 +264,9 @@ self.face_center = (190, 115)
 def generate_with_emoji(self, emoji_char, position=(330, 180), size=250, output_path=None):
 ```
 
-## ライセンス
+## 📄 ライセンス
 
 このプロジェクトはオープンソースです。画像の使用については適切な権利を確認してください。
 
-- 絵文字画像: Twitter Twemoji (CC BY 4.0)
-- ベース画像: 適切な権利を確認してください
+- **絵文字画像**: Twitter Twemoji (CC BY 4.0)
+- **ベース画像**: 適切な権利を確認してください
