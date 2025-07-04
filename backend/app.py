@@ -46,10 +46,10 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 class GenerateRequest(BaseModel):
     text: Optional[str] = None
     emoji: Optional[str] = None
-    x: int = 330
-    y: int = 180
+    x: int = 260  # 猫の顔の中心位置
+    y: int = 143  # 猫の顔の中心位置
     font_size: int = 48
-    emoji_size: int = 250
+    emoji_size: int = 164
 
 @app.get("/")
 async def root():
@@ -59,10 +59,10 @@ async def root():
 async def generate_icon(
     text: Optional[str] = Form(None),
     emoji: Optional[str] = Form(None),
-    x: int = Form(330),
-    y: int = Form(180),
+    x: int = Form(260),  # 猫の顔の中心位置
+    y: int = Form(143),  # 猫の顔の中心位置
     font_size: int = Form(48),
-    emoji_size: int = Form(250),
+    emoji_size: int = Form(164),
     text_color: str = Form("#ffffff"),
     base_image: Optional[UploadFile] = File(None)
 ):

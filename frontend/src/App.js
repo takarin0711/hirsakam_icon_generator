@@ -5,10 +5,10 @@ function App() {
   const [formData, setFormData] = useState({
     text: '',
     emoji: '',
-    x: 330,
-    y: 180,
+    x: 260,  // 猫の顔の中心位置に合わせる
+    y: 143,  // 猫の顔の中心位置に合わせる
     fontSize: 48,
-    emojiSize: 250,
+    emojiSize: 164,
     textColor: '#ffffff'
   });
   const [baseImage, setBaseImage] = useState(null);
@@ -368,6 +368,13 @@ function App() {
     link.click();
   };
 
+  // Twemoji絵文字画像を取得する関数
+  const getTwemojiUrl = (emoji) => {
+    if (!emoji) return null;
+    const codepoint = emoji.codePointAt(0)?.toString(16);
+    return `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/${codepoint}.png`;
+  };
+
   // 人気の絵文字一覧
   const popularEmojis = [
     '😂', '😍', '😘', '😊', '😉', '😁', '😋', '😀',
@@ -407,7 +414,16 @@ function App() {
                 onClick={() => handleEmojiSelect(emoji)}
                 title={emoji}
               >
-                {emoji}
+                <img 
+                  src={getTwemojiUrl(emoji)}
+                  alt={emoji}
+                  className="emoji-picker-twemoji"
+                  onError={(e) => {
+                    // Twemojiが読み込めない場合はフォールバック
+                    e.target.style.display = 'none';
+                    e.target.parentNode.appendChild(document.createTextNode(emoji));
+                  }}
+                />
               </button>
             ))}
           </div>
@@ -522,21 +538,37 @@ function App() {
             <div className="form-group">
               <label>絵文字:</label>
               <div className="emoji-input-container">
-                <input
-                  type="text"
-                  name="emoji"
-                  value={formData.emoji}
-                  onChange={handleInputChange}
-                  placeholder="絵文字を選んでください"
-                  className="text-input emoji-display"
-                  readOnly
-                />
+                <div className="emoji-display-wrapper">
+                  {formData.emoji ? (
+                    <div className="selected-emoji-display">
+                      <img 
+                        src={getTwemojiUrl(formData.emoji)}
+                        alt={formData.emoji}
+                        className="selected-emoji-twemoji"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.nextSibling.style.display = 'inline';
+                        }}
+                      />
+                      <span className="selected-emoji-fallback" style={{display: 'none'}}>
+                        {formData.emoji}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="emoji-placeholder">絵文字を選んでください</div>
+                  )}
+                </div>
                 <button
                   type="button"
                   className="emoji-picker-button"
                   onClick={() => setShowEmojiPicker(true)}
                 >
-                  😊 選ぶ
+                  <img 
+                    src={getTwemojiUrl('😊')}
+                    alt="😊"
+                    className="button-emoji-twemoji"
+                  />
+                  選ぶ
                 </button>
                 {formData.emoji && (
                   <button
@@ -645,29 +677,58 @@ function App() {
                     }}
                   >
                     <div className="bounding-box">
-                      <div 
-                        className="text-overlay"
-                        style={{
-                          fontSize: formData.emoji ? `${formData.emojiSize}px` : `${formData.fontSize}px`,
-                          color: formData.text ? formData.textColor : 'inherit',
-                          pointerEvents: 'none', // リサイズハンドルのクリックを妨げない
-                          maxWidth: formData.text ? '400px' : 'none',
-                          wordWrap: 'break-word',
-                          overflowWrap: 'break-word',
-                          hyphens: 'auto',
-                          lineHeight: '1.2',
-                          // テキストが長い場合のみ改行を許可
-                          whiteSpace: (() => {
-                            if (!formData.text) return 'nowrap';
-                            const fontSize = formData.fontSize;
-                            const charWidth = fontSize * 0.6;
-                            const totalWidth = formData.text.length * charWidth;
-                            return totalWidth > 400 ? 'normal' : 'nowrap';
-                          })()
-                        }}
-                      >
-                        {formData.emoji || formData.text}
-                      </div>
+                      {formData.emoji ? (
+                        <img 
+                          src={getTwemojiUrl(formData.emoji)}
+                          alt={formData.emoji}
+                          className="twemoji-preview"
+                          style={{
+                            width: `${formData.emojiSize}px`,
+                            height: `${formData.emojiSize}px`,
+                            pointerEvents: 'none'
+                          }}
+                          onError={(e) => {
+                            // Twemojiが読み込めない場合はフォールバック
+                            e.target.style.display = 'none';
+                            e.target.nextSibling.style.display = 'block';
+                          }}
+                        />
+                      ) : null}
+                      {formData.emoji ? (
+                        <div 
+                          className="emoji-fallback"
+                          style={{
+                            fontSize: `${formData.emojiSize}px`,
+                            display: 'none',
+                            pointerEvents: 'none'
+                          }}
+                        >
+                          {formData.emoji}
+                        </div>
+                      ) : null}
+                      {formData.text ? (
+                        <div 
+                          className="text-overlay"
+                          style={{
+                            fontSize: `${formData.fontSize}px`,
+                            color: formData.textColor,
+                            pointerEvents: 'none',
+                            maxWidth: '400px',
+                            wordWrap: 'break-word',
+                            overflowWrap: 'break-word',
+                            hyphens: 'auto',
+                            lineHeight: '1.2',
+                            whiteSpace: (() => {
+                              const fontSize = formData.fontSize;
+                              const charWidth = fontSize * 0.6;
+                              const totalWidth = formData.text.length * charWidth;
+                              return totalWidth > 400 ? 'normal' : 'nowrap';
+                            })()
+                          }}
+                        >
+                          {formData.text}
+                        </div>
+                      ) : null}
                       
                       {/* 四隅のリサイズハンドル */}
                       <div 

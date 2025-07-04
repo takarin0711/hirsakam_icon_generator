@@ -131,13 +131,13 @@ source ../venv/bin/activate  # 仮想環境をアクティベート
 # 基本的な絵文字コラ画像を生成
 python3 hirsakam_icon_generator.py --emoji 😍
 
-# 大きな絵文字で猫の顔の輪郭に合わせる
-python3 hirsakam_icon_generator.py --emoji 😍 --emoji-size 250 --x 330 --y 180
+# 大きな絵文字で猫の顔の中心に配置（デフォルト位置）
+python3 hirsakam_icon_generator.py --emoji 😍 --emoji-size 250
 
-# 様々な絵文字を試す
-python3 hirsakam_icon_generator.py --emoji 😂 --emoji-size 200 --x 320 --y 170
-python3 hirsakam_icon_generator.py --emoji 😭 --emoji-size 220 --x 325 --y 175
-python3 hirsakam_icon_generator.py --emoji 😎 --emoji-size 250 --x 330 --y 180
+# 様々な絵文字を試す（デフォルトで猫の顔の中心に配置）
+python3 hirsakam_icon_generator.py --emoji 😂 --emoji-size 200
+python3 hirsakam_icon_generator.py --emoji 😭 --emoji-size 220
+python3 hirsakam_icon_generator.py --emoji 😎 --emoji-size 250
 ```
 
 #### カスタムテキストを使用
@@ -154,8 +154,8 @@ python3 hirsakam_icon_generator.py --text "こんばんは" --size 60
 
 #### その他のオプション
 ```bash
-# 出力ファイル名を指定
-python3 hirsakam_icon_generator.py --emoji 😍 --output my_emoji.jpg
+# 出力ファイル名を指定  
+python3 hirsakam_icon_generator.py --emoji 😍 --emoji-size 164 --output my_emoji.jpg
 
 # ベース画像を変更
 python3 hirsakam_icon_generator.py --base another_image.jpg --emoji 😊
@@ -165,13 +165,13 @@ python3 hirsakam_icon_generator.py --base another_image.jpg --emoji 😊
 
 | 絵文字 | 推奨コマンド | 説明 |
 |-------|-------------|------|
-| 😍 | `python3 hirsakam_icon_generator.py --emoji 😍 --emoji-size 250 --x 330 --y 180` | ハート目の猫 |
-| 😂 | `python3 hirsakam_icon_generator.py --emoji 😂 --emoji-size 220 --x 325 --y 175` | 大笑いの猫 |
-| 😭 | `python3 hirsakam_icon_generator.py --emoji 😭 --emoji-size 230 --x 325 --y 175` | 大泣きの猫 |
-| 😎 | `python3 hirsakam_icon_generator.py --emoji 😎 --emoji-size 250 --x 330 --y 180` | クールな猫 |
-| 😴 | `python3 hirsakam_icon_generator.py --emoji 😴 --emoji-size 200 --x 315 --y 165` | 眠い猫 |
-| 🤔 | `python3 hirsakam_icon_generator.py --emoji 🤔 --emoji-size 220 --x 320 --y 170` | 考える猫 |
-| 😏 | `python3 hirsakam_icon_generator.py --emoji 😏 --emoji-size 240 --x 325 --y 175` | ニヤリとする猫 |
+| 😍 | `python3 hirsakam_icon_generator.py --emoji 😍 --emoji-size 250` | ハート目の猫 |
+| 😂 | `python3 hirsakam_icon_generator.py --emoji 😂 --emoji-size 220` | 大笑いの猫 |
+| 😭 | `python3 hirsakam_icon_generator.py --emoji 😭 --emoji-size 230` | 大泣きの猫 |
+| 😎 | `python3 hirsakam_icon_generator.py --emoji 😎 --emoji-size 250` | クールな猫 |
+| 😴 | `python3 hirsakam_icon_generator.py --emoji 😴 --emoji-size 200` | 眠い猫 |
+| 🤔 | `python3 hirsakam_icon_generator.py --emoji 🤔 --emoji-size 220` | 考える猫 |
+| 😏 | `python3 hirsakam_icon_generator.py --emoji 😏 --emoji-size 240` | ニヤリとする猫 |
 
 ## 🔧 コマンドライン引数
 
@@ -181,8 +181,8 @@ python3 hirsakam_icon_generator.py --base another_image.jpg --emoji 😊
 | `--emoji` | 絵文字（例: 😍） | - |
 | `--text` | カスタムテキスト | - |
 | `--output` | 出力ファイル名 | 自動生成 |
-| `--x` | X座標 | 50 (テキスト), 330 (絵文字) |
-| `--y` | Y座標 | 50 (テキスト), 180 (絵文字) |
+| `--x` | X座標 | 190 (猫の顔の中心) |
+| `--y` | Y座標 | 115 (猫の顔の中心) |
 | `--size` | フォントサイズ | 48 |
 | `--emoji-size` | 絵文字のサイズ（ピクセル） | 250 |
 
