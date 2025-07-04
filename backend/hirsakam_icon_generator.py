@@ -226,7 +226,7 @@ class HirsakamGenerator:
             return self.add_emoji_to_image(image, emoji_char, position, 96)
     
     
-    def generate_with_emoji(self, emoji_char, position=(300, 155), size=150, output_path=None):
+    def generate_with_emoji(self, emoji_char, position=(330, 180), size=250, output_path=None):
         """絵文字を使用してコラ画像を生成"""
         image = self.load_base_image()
         
