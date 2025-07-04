@@ -64,7 +64,8 @@ async def generate_icon(
     font_size: int = Form(48),
     emoji_size: int = Form(164),
     text_color: str = Form("#ffffff"),
-    base_image: Optional[UploadFile] = File(None)
+    base_image: Optional[UploadFile] = File(None),
+    drawing_data: Optional[UploadFile] = File(None)
 ):
     """
     アイコンを生成する
@@ -119,6 +120,23 @@ async def generate_icon(
             )
         else:
             raise HTTPException(status_code=400, detail="テキストまたは絵文字を指定してください")
+        
+        # 描画データがある場合は合成
+        if drawing_data:
+            print("Drawing data received, processing...")
+            # 描画データを一時ファイルとして保存
+            drawing_id = str(uuid.uuid4())
+            drawing_temp_path = os.path.join(UPLOAD_DIR, f"drawing_{drawing_id}.png")
+            
+            with open(drawing_temp_path, "wb") as buffer:
+                shutil.copyfileobj(drawing_data.file, buffer)
+            
+            # 描画データを合成
+            result_path = generator.add_drawing_overlay(result_path, drawing_temp_path, output_path)
+            
+            # 描画一時ファイルを削除
+            if os.path.exists(drawing_temp_path):
+                os.remove(drawing_temp_path)
         
         # 一時ファイルを削除（アップロードされたファイルのみ）
         hirsakam_default = os.path.join("..", "hirsakam.jpg")
