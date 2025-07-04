@@ -269,6 +269,46 @@ class HirsakamGenerator:
         
         image.save(output_path, "JPEG", quality=95)
         return output_path
+    
+    def add_drawing_overlay(self, base_image_path, drawing_image_path, output_path=None):
+        """描画オーバーレイを既存の画像に合成"""
+        try:
+            # ベース画像を読み込み
+            base_image = Image.open(base_image_path)
+            
+            # 描画画像を読み込み
+            drawing_image = Image.open(drawing_image_path)
+            
+            # 描画画像をベース画像のサイズにリサイズ
+            drawing_image = drawing_image.resize(base_image.size, Image.Resampling.LANCZOS)
+            
+            # 両方の画像をRGBAモードに変換
+            if base_image.mode != 'RGBA':
+                base_image = base_image.convert('RGBA')
+            if drawing_image.mode != 'RGBA':
+                drawing_image = drawing_image.convert('RGBA')
+            
+            # 描画画像を合成
+            combined = Image.alpha_composite(base_image, drawing_image)
+            
+            # 出力パスが指定されていない場合はベース画像のパスを使用
+            if output_path is None:
+                output_path = base_image_path
+            
+            # 画像を保存（RGBAの場合はRGBに変換）
+            if combined.mode == 'RGBA':
+                # 白背景でRGBに変換
+                rgb_image = Image.new('RGB', combined.size, (255, 255, 255))
+                rgb_image.paste(combined, mask=combined.split()[-1])
+                combined = rgb_image
+            
+            combined.save(output_path, "JPEG", quality=95)
+            return output_path
+            
+        except Exception as e:
+            print(f"描画オーバーレイ合成エラー: {e}")
+            # エラーの場合は元の画像をそのまま返す
+            return base_image_path
 
 def main():
     parser = argparse.ArgumentParser(description="Hirsakam コラ画像ジェネレーター")

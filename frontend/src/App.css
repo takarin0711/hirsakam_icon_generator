@@ -410,6 +410,89 @@ h1 {
   background: #0056b3;
 }
 
+/* 描画ツールのスタイル */
+.drawing-controls-preview {
+  margin-top: 20px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 2px solid #ddd;
+}
+
+.drawing-controls-preview h3 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  color: #555;
+}
+
+.thickness-slider {
+  width: 100%;
+  margin-top: 5px;
+}
+
+.drawing-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 15px;
+  flex-wrap: wrap;
+}
+
+.drawing-button {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: bold;
+  transition: all 0.2s;
+  flex: 1;
+  min-width: 70px;
+}
+
+.undo-button {
+  background: #6c757d;
+  color: white;
+}
+
+.undo-button:hover:not(:disabled) {
+  background: #5a6268;
+}
+
+.redo-button {
+  background: #6c757d;
+  color: white;
+}
+
+.redo-button:hover:not(:disabled) {
+  background: #5a6268;
+}
+
+.clear-button {
+  background: #dc3545;
+  color: white;
+}
+
+.clear-button:hover {
+  background: #c82333;
+}
+
+.drawing-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.drawing-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  cursor: crosshair;
+  pointer-events: none;
+}
+
+.drawing-canvas[style*="display: block"] {
+  pointer-events: auto;
+}
+
 /* 絵文字ピッカーのスタイル */
 .emoji-input-container {
   display: flex;

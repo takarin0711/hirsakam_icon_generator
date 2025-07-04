@@ -25,8 +25,19 @@ function App() {
   const [textBounds, setTextBounds] = useState({ width: 0, height: 0 });
   const [imageScale, setImageScale] = useState(1);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  
+  // Drawing states
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [drawingMode, setDrawingMode] = useState(false);
+  const [drawingColor, setDrawingColor] = useState('#ff0000');
+  const [drawingThickness, setDrawingThickness] = useState(5);
+  const [drawingHistory, setDrawingHistory] = useState([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  
   const previewRef = useRef(null);
   const imageRef = useRef(null);
+  const drawingCanvasRef = useRef(null);
+  const drawingContextRef = useRef(null);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -93,19 +104,131 @@ function App() {
       const scale = naturalWidth / displayWidth;
       setImageScale(scale);
       console.log(`Image scale: ${scale} (natural: ${naturalWidth}, display: ${displayWidth})`);
+      
+      // 描画キャンバスを初期化
+      initializeDrawingCanvas();
     }
   };
 
-  const startPreview = () => {
-    if (!formData.text && !formData.emoji) {
-      alert('テキストまたは絵文字を入力してください');
-      return;
+  const initializeDrawingCanvas = () => {
+    if (drawingCanvasRef.current && imageRef.current) {
+      const canvas = drawingCanvasRef.current;
+      const context = canvas.getContext('2d');
+      
+      // キャンバスサイズを画像表示サイズに合わせる
+      const rect = imageRef.current.getBoundingClientRect();
+      canvas.width = imageRef.current.clientWidth;
+      canvas.height = imageRef.current.clientHeight;
+      
+      // コンテキストの設定
+      context.lineCap = 'round';
+      context.lineJoin = 'round';
+      context.globalCompositeOperation = 'source-over';
+      
+      drawingContextRef.current = context;
+      
+      // 履歴をクリア
+      setDrawingHistory([]);
+      setHistoryIndex(-1);
+      saveToHistory();
     }
-    // プレビューモード開始時にtextBoundsを設定
-    const bounds = calculateTextBounds();
-    setTextBounds(bounds);
+  };
+
+  const saveToHistory = () => {
+    if (!drawingCanvasRef.current) return;
+    
+    const canvas = drawingCanvasRef.current;
+    const imageData = canvas.toDataURL();
+    
+    setDrawingHistory(prev => {
+      const newHistory = prev.slice(0, historyIndex + 1);
+      newHistory.push(imageData);
+      return newHistory;
+    });
+    setHistoryIndex(prev => prev + 1);
+  };
+
+  const undo = () => {
+    if (historyIndex > 0) {
+      setHistoryIndex(prev => prev - 1);
+      restoreFromHistory(historyIndex - 1);
+    }
+  };
+
+  const redo = () => {
+    if (historyIndex < drawingHistory.length - 1) {
+      setHistoryIndex(prev => prev + 1);
+      restoreFromHistory(historyIndex + 1);
+    }
+  };
+
+  const restoreFromHistory = (index) => {
+    if (!drawingCanvasRef.current || !drawingHistory[index]) return;
+    
+    const canvas = drawingCanvasRef.current;
+    const context = drawingContextRef.current;
+    const img = new Image();
+    
+    img.onload = () => {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(img, 0, 0);
+    };
+    img.src = drawingHistory[index];
+  };
+
+  const clearDrawing = () => {
+    if (!drawingCanvasRef.current) return;
+    
+    const canvas = drawingCanvasRef.current;
+    const context = drawingContextRef.current;
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    saveToHistory();
+  };
+
+  const handleDrawingStart = (e) => {
+    if (!drawingMode || !drawingCanvasRef.current) return;
+    
+    setIsDrawing(true);
+    const canvas = drawingCanvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    const context = drawingContextRef.current;
+    context.strokeStyle = drawingColor;
+    context.lineWidth = drawingThickness;
+    context.beginPath();
+    context.moveTo(x, y);
+  };
+
+  const handleDrawingMove = (e) => {
+    if (!isDrawing || !drawingMode || !drawingCanvasRef.current) return;
+    
+    const canvas = drawingCanvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    const context = drawingContextRef.current;
+    context.lineTo(x, y);
+    context.stroke();
+  };
+
+  const handleDrawingEnd = () => {
+    if (!isDrawing || !drawingMode) return;
+    
+    setIsDrawing(false);
+    saveToHistory();
+  };
+
+  const startPreview = () => {
+    // テキストや絵文字がある場合のみtextBoundsを設定
+    if (formData.text || formData.emoji) {
+      const bounds = calculateTextBounds();
+      setTextBounds(bounds);
+      console.log('Preview started with bounds:', bounds);
+    }
     setPreviewMode(true);
-    console.log('Preview started with bounds:', bounds);
   };
 
   const handleMouseDown = (e) => {
@@ -248,10 +371,11 @@ function App() {
     }
   };
 
-  const handleWheel = (e) => {
+  const handleWheelOnTextOverlay = (e) => {
     if (!previewMode) return;
     
     e.preventDefault();
+    e.stopPropagation();
     const delta = e.deltaY > 0 ? -5 : 5;
     
     if (formData.emoji) {
@@ -299,8 +423,11 @@ function App() {
   };
 
   const generateIcon = async () => {
-    if (!formData.text && !formData.emoji) {
-      alert('テキストまたは絵文字を入力してください');
+    // 描画データがあるかチェック
+    const hasDrawing = drawingCanvasRef.current && drawingHistory.length > 1; // 初期状態以外の履歴がある
+    
+    if (!formData.text && !formData.emoji && !hasDrawing) {
+      alert('テキスト、絵文字、または描画のいずれかを入力してください');
       return;
     }
 
@@ -321,6 +448,17 @@ function App() {
       
       if (baseImage) {
         data.append('base_image', baseImage);
+      }
+
+      // 描画データがある場合は送信
+      if (drawingCanvasRef.current && drawingMode) {
+        const canvas = drawingCanvasRef.current;
+        const drawingDataURL = canvas.toDataURL('image/png');
+        
+        // Data URLをBlobに変換
+        const drawingResponse = await fetch(drawingDataURL);
+        const blob = await drawingResponse.blob();
+        data.append('drawing_data', blob, 'drawing.png');
       }
 
       const response = await fetch('http://localhost:8000/generate', {
@@ -634,9 +772,9 @@ function App() {
               </div>
             </div>
 
+
             <button 
               onClick={startPreview} 
-              disabled={!formData.text && !formData.emoji}
               className="preview-button-single"
             >
               プレビュー
@@ -644,13 +782,13 @@ function App() {
           </div>
 
           <div className="result-section">
-            <h2>{previewMode ? 'プレビュー（ドラッグで位置・四隅の○でサイズ調整）' : '生成結果'}</h2>
+            <h2>{previewMode ? 'プレビュー（ドラッグで位置・サイズ調整 / 描画モード）' : '生成結果'}</h2>
             {previewMode ? (
-              <div className="preview-container">
+              <>
+                <div className="preview-container">
                 <div 
                   className="preview-canvas"
                   ref={previewRef}
-                  onWheel={handleWheel}
                 >
                   <img 
                     ref={imageRef}
@@ -660,21 +798,88 @@ function App() {
                     draggable={false}
                     onLoad={handleImageLoad}
                   />
-                  <div 
-                    className="text-overlay-container"
+                  
+                  {/* Drawing Canvas */}
+                  <canvas
+                    ref={drawingCanvasRef}
+                    className="drawing-canvas"
+                    onMouseDown={handleDrawingStart}
+                    onMouseMove={handleDrawingMove}
+                    onMouseUp={handleDrawingEnd}
+                    onMouseLeave={handleDrawingEnd}
                     style={{
-                      left: Math.max(0, formData.x - (Math.max(textBounds.width, 50) + 40) / 2),
-                      top: Math.max(0, formData.y - (Math.max(textBounds.height, 50) + 40) / 2),
-                      width: Math.min(500, Math.max(textBounds.width, 50) + 40),
-                      height: Math.min(500, Math.max(textBounds.height, 50) + 40),
-                      cursor: isDragging ? 'grabbing' : 'grab',
-                      userSelect: 'none'
+                      display: drawingMode ? 'block' : 'none',
+                      pointerEvents: drawingMode ? 'auto' : 'none',
+                      zIndex: drawingMode ? 15 : 5
                     }}
+                  />
+                  
+                  {/* 描画モード時の固定表示オーバーレイ */}
+                  {drawingMode && (
+                    <div 
+                      className="fixed-overlay"
+                      style={{
+                        left: formData.x - formData.emojiSize / 2,
+                        top: formData.y - formData.emojiSize / 2,
+                        width: formData.emojiSize,
+                        height: formData.emojiSize,
+                        position: 'absolute',
+                        pointerEvents: 'none',
+                        zIndex: 8
+                      }}
+                    >
+                      {formData.emoji ? (
+                        <img 
+                          src={getTwemojiUrl(formData.emoji)}
+                          alt={formData.emoji}
+                          className="twemoji-preview"
+                          style={{
+                            width: `${formData.emojiSize}px`,
+                            height: `${formData.emojiSize}px`,
+                            pointerEvents: 'none'
+                          }}
+                        />
+                      ) : null}
+                      {formData.text ? (
+                        <div 
+                          className="text-overlay"
+                          style={{
+                            fontSize: `${formData.fontSize}px`,
+                            color: formData.textColor,
+                            pointerEvents: 'none',
+                            position: 'absolute',
+                            left: formData.x - 200,
+                            top: formData.y - formData.fontSize / 2,
+                            width: '400px',
+                            textAlign: 'center'
+                          }}
+                        >
+                          {formData.text}
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+
+                  {/* テキストや絵文字がある場合のみ表示 */}
+                  {(formData.text || formData.emoji) && (
+                    <div 
+                      className="text-overlay-container"
+                      style={{
+                        left: Math.max(0, formData.x - (Math.max(textBounds.width, 50) + 40) / 2),
+                        top: Math.max(0, formData.y - (Math.max(textBounds.height, 50) + 40) / 2),
+                        width: Math.min(500, Math.max(textBounds.width, 50) + 40),
+                        height: Math.min(500, Math.max(textBounds.height, 50) + 40),
+                        cursor: drawingMode ? 'default' : (isDragging ? 'grabbing' : 'grab'),
+                        userSelect: 'none',
+                        pointerEvents: drawingMode ? 'none' : 'auto',
+                        display: drawingMode ? 'none' : 'block'
+                      }}
                     onMouseDown={(e) => {
                       console.log('TEXT CONTAINER CLICKED!');
                       e.stopPropagation();
                       handleMouseDown(e);
                     }}
+                    onWheel={handleWheelOnTextOverlay}
                   >
                     <div className="bounding-box">
                       {formData.emoji ? (
@@ -764,19 +969,22 @@ function App() {
                         }}
                       />
                     </div>
-                  </div>
+                    </div>
+                  )}
                 </div>
-                <div className="preview-info">
-                  <div className="current-settings">
-                    <span>位置: ({Math.round(formData.x)}, {Math.round(formData.y)})</span>
-                    <span>
-                      {formData.emoji 
-                        ? `絵文字サイズ: ${formData.emojiSize}px` 
-                        : `フォントサイズ: ${formData.fontSize}px`
-                      }
-                    </span>
+                {(formData.text || formData.emoji) && (
+                  <div className="preview-info">
+                    <div className="current-settings">
+                      <span>位置: ({Math.round(formData.x)}, {Math.round(formData.y)})</span>
+                      <span>
+                        {formData.emoji 
+                          ? `絵文字サイズ: ${formData.emojiSize}px` 
+                          : `フォントサイズ: ${formData.fontSize}px`
+                        }
+                      </span>
+                    </div>
                   </div>
-                </div>
+                )}
                 <div className="preview-controls">
                   <button 
                     onClick={() => {
@@ -799,6 +1007,73 @@ function App() {
                   </button>
                 </div>
               </div>
+              <div className="drawing-controls-preview">
+                <h3>描画ツール</h3>
+                <div className="form-group">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={drawingMode}
+                      onChange={(e) => setDrawingMode(e.target.checked)}
+                    />
+{drawingMode ? '描画モード (絵文字・テキスト固定)' : '描画モードを有効にする'}
+                  </label>
+                </div>
+                
+                {drawingMode && (
+                  <>
+                    <div className="form-group">
+                      <label>描画色:</label>
+                      <div className="color-input-container">
+                        <input
+                          type="color"
+                          value={drawingColor}
+                          onChange={(e) => setDrawingColor(e.target.value)}
+                          className="color-input"
+                        />
+                        <span className="color-preview" style={{ backgroundColor: drawingColor }}></span>
+                        <span className="color-value">{drawingColor}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="form-group">
+                      <label>線の太さ: {drawingThickness}px</label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="20"
+                        value={drawingThickness}
+                        onChange={(e) => setDrawingThickness(parseInt(e.target.value))}
+                        className="thickness-slider"
+                      />
+                    </div>
+                    
+                    <div className="drawing-buttons">
+                      <button
+                        onClick={undo}
+                        disabled={historyIndex <= 0}
+                        className="drawing-button undo-button"
+                      >
+                        ↶ Undo
+                      </button>
+                      <button
+                        onClick={redo}
+                        disabled={historyIndex >= drawingHistory.length - 1}
+                        className="drawing-button redo-button"
+                      >
+                        ↷ Redo
+                      </button>
+                      <button
+                        onClick={clearDrawing}
+                        className="drawing-button clear-button"
+                      >
+                        🗑️ クリア
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+              </>
             ) : generatedImage ? (
               <div className="generated-image">
                 <img 
