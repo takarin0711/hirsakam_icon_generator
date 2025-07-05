@@ -10,9 +10,11 @@ function App() {
     textColor: '#ffffff'
   });
   
-  // テキストと絵文字の個別位置
+  // テキストと絵文字の個別位置と回転
   const [textPosition, setTextPosition] = useState({ x: 260, y: 100 });
   const [emojiPosition, setEmojiPosition] = useState({ x: 260, y: 180 });
+  const [textRotation, setTextRotation] = useState(0);
+  const [emojiRotation, setEmojiRotation] = useState(0);
   
   // 現在操作中の要素
   const [activeElement, setActiveElement] = useState(null); // 'text', 'emoji', null
@@ -38,12 +40,20 @@ function App() {
   const [drawingThickness, setDrawingThickness] = useState(5);
   const [drawingHistory, setDrawingHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [canvasReady, setCanvasReady] = useState(false);
   
   // Overlay image states
   const [overlayImages, setOverlayImages] = useState([]);
   const [selectedOverlayIndex, setSelectedOverlayIndex] = useState(-1);
   const [isOverlayDragging, setIsOverlayDragging] = useState(false);
   const [isOverlayResizing, setIsOverlayResizing] = useState(false);
+  const [isRotating, setIsRotating] = useState(false);
+  const [rotatingElement, setRotatingElement] = useState(null); // 'text', 'emoji', or overlay index
+  const [initialAngle, setInitialAngle] = useState(0);
+  const [rotationCenter, setRotationCenter] = useState({ x: 0, y: 0 });
+  
+  // 画像圧縮の状態
+  const [imageCompressionInfo, setImageCompressionInfo] = useState(null);
   
   const previewRef = useRef(null);
   const imageRef = useRef(null);
@@ -67,49 +77,148 @@ function App() {
     setShowEmojiPicker(false);
   };
 
-  const handleImageUpload = (e) => {
+  const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (file) {
-      setBaseImage(file);
+      try {
+        // ファイルサイズをチェック
+        const fileSizeKB = file.size / 1024;
+        console.log(`ベース画像サイズ: ${fileSizeKB.toFixed(1)}KB`);
+        
+        // 1MB以上の場合は圧縮
+        let processedFile = file;
+        let compressionInfo = null;
+        
+        if (fileSizeKB > 1000) {
+          console.log('ベース画像のファイルサイズが大きいため圧縮を開始...');
+          processedFile = await compressImage(file, 1000);
+          const compressedSizeKB = processedFile.size / 1024;
+          console.log(`圧縮後サイズ: ${compressedSizeKB.toFixed(1)}KB`);
+          
+          compressionInfo = {
+            original: fileSizeKB.toFixed(1),
+            compressed: compressedSizeKB.toFixed(1),
+            reduction: ((fileSizeKB - compressedSizeKB) / fileSizeKB * 100).toFixed(1)
+          };
+        }
+        
+        setImageCompressionInfo(compressionInfo);
+        setBaseImage(processedFile);
+      } catch (error) {
+        console.error('ベース画像の処理中にエラーが発生しました:', error);
+        alert('ベース画像の処理中にエラーが発生しました。別の画像を試してください。');
+      }
     }
   };
 
-  const handleOverlayImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
+  const compressImage = (file, maxSizeKB = 800) => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
       const img = new Image();
+      
       img.onload = () => {
-        // 実際の画像のアスペクト比を維持して初期サイズを設定
-        const maxSize = 150;
-        let width, height;
+        // 最大解像度を設定（ファイルサイズ削減のため）
+        const maxDimension = 800;
+        let { width, height } = img;
         
-        if (img.width > img.height) {
-          // 横長の画像
-          width = maxSize;
-          height = (img.height / img.width) * maxSize;
+        // アスペクト比を維持してリサイズ
+        if (width > height) {
+          if (width > maxDimension) {
+            height = (height * maxDimension) / width;
+            width = maxDimension;
+          }
         } else {
-          // 縦長または正方形の画像
-          height = maxSize;
-          width = (img.width / img.height) * maxSize;
+          if (height > maxDimension) {
+            width = (width * maxDimension) / height;
+            height = maxDimension;
+          }
         }
         
-        const newOverlay = {
-          id: Date.now(),
-          file: file,
-          url: URL.createObjectURL(file),
-          x: 200,
-          y: 150,
-          width: width,
-          height: height,
-          originalWidth: img.width,
-          originalHeight: img.height,
-          opacity: 1,
-          rotation: 0
+        canvas.width = width;
+        canvas.height = height;
+        
+        // 画像を描画
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // 品質を調整してファイルサイズを制限
+        let quality = 0.8;
+        const tryCompress = () => {
+          canvas.toBlob((blob) => {
+            const sizeKB = blob.size / 1024;
+            console.log(`圧縮結果: ${sizeKB.toFixed(1)}KB (目標: ${maxSizeKB}KB以下, 品質: ${quality})`);
+            
+            if (sizeKB <= maxSizeKB || quality <= 0.3) {
+              // ファイルサイズが目標以下、または品質が最低レベルの場合は完了
+              resolve(blob);
+            } else {
+              // 品質を下げて再試行
+              quality -= 0.1;
+              tryCompress();
+            }
+          }, 'image/jpeg', quality);
         };
-        setOverlayImages(prev => [...prev, newOverlay]);
-        setSelectedOverlayIndex(overlayImages.length);
+        
+        tryCompress();
       };
+      
       img.src = URL.createObjectURL(file);
+    });
+  };
+
+  const handleOverlayImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      try {
+        // ファイルサイズをチェック
+        const fileSizeKB = file.size / 1024;
+        console.log(`オリジナルファイルサイズ: ${fileSizeKB.toFixed(1)}KB`);
+        
+        // 800KB以上の場合は圧縮
+        let processedFile = file;
+        if (fileSizeKB > 800) {
+          console.log('ファイルサイズが大きいため圧縮を開始...');
+          processedFile = await compressImage(file, 800);
+          console.log(`圧縮後サイズ: ${(processedFile.size / 1024).toFixed(1)}KB`);
+        }
+        
+        const img = new Image();
+        img.onload = () => {
+          // 実際の画像のアスペクト比を維持して初期サイズを設定
+          const maxSize = 150;
+          let width, height;
+          
+          if (img.width > img.height) {
+            // 横長の画像
+            width = maxSize;
+            height = (img.height / img.width) * maxSize;
+          } else {
+            // 縦長または正方形の画像
+            height = maxSize;
+            width = (img.width / img.height) * maxSize;
+          }
+          
+          const newOverlay = {
+            id: Date.now(),
+            file: processedFile,
+            url: URL.createObjectURL(processedFile),
+            x: 200,
+            y: 150,
+            width: width,
+            height: height,
+            originalWidth: img.width,
+            originalHeight: img.height,
+            opacity: 1,
+            rotation: 0
+          };
+          setOverlayImages(prev => [...prev, newOverlay]);
+          setSelectedOverlayIndex(overlayImages.length);
+        };
+        img.src = URL.createObjectURL(processedFile);
+      } catch (error) {
+        console.error('画像の処理中にエラーが発生しました:', error);
+        alert('画像の処理中にエラーが発生しました。別の画像を試してください。');
+      }
     }
   };
 
@@ -129,6 +238,13 @@ function App() {
     setOverlayImages(prev => 
       prev.map((img, i) => i === index ? { ...img, ...updates } : img)
     );
+  };
+
+  // 角度計算のヘルパー関数
+  const calculateAngle = (centerX, centerY, mouseX, mouseY) => {
+    const deltaX = mouseX - centerX;
+    const deltaY = mouseY - centerY;
+    return Math.atan2(deltaY, deltaX) * (180 / Math.PI);
   };
 
   const calculateTextBounds = () => {
@@ -223,8 +339,14 @@ function App() {
       // 履歴をクリア（初期状態は保存しない）
       setDrawingHistory([]);
       setHistoryIndex(-1);
+      
+      // 初期化完了をマーク（少し遅延を入れて確実に完了）
+      setTimeout(() => {
+        setCanvasReady(true);
+      }, 100);
     } else {
       console.log('❌ Canvas init failed - Canvas:', !!drawingCanvasRef.current, 'Image:', !!imageRef.current);
+      setCanvasReady(false);
     }
   };
 
@@ -246,12 +368,14 @@ function App() {
       const imageData = canvas.toDataURL();
       
       
+      // 状態の更新を一つの関数でまとめて実行
       setDrawingHistory(prev => {
         const newHistory = prev.slice(0, historyIndex + 1);
         newHistory.push(imageData);
+        // historyIndexも同時に更新
+        setTimeout(() => setHistoryIndex(newHistory.length - 1), 0);
         return newHistory;
       });
-      setHistoryIndex(prev => prev + 1);
     } catch (error) {
       console.error('Failed to save canvas to history:', error);
     }
@@ -287,6 +411,71 @@ function App() {
     img.src = drawingHistory[index];
   };
 
+  // 回転処理
+  const handleRotationStart = (e, elementType, elementIndex = null) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const rect = imageRef.current.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    let centerX, centerY, currentRotation;
+    
+    if (elementType === 'text') {
+      centerX = textPosition.x;
+      centerY = textPosition.y;
+      currentRotation = textRotation;
+    } else if (elementType === 'emoji') {
+      centerX = emojiPosition.x;
+      centerY = emojiPosition.y;
+      currentRotation = emojiRotation;
+    } else if (typeof elementType === 'number') {
+      // オーバーレイ画像
+      const overlay = overlayImages[elementType];
+      centerX = overlay.x;
+      centerY = overlay.y;
+      currentRotation = overlay.rotation || 0;
+    }
+    
+    const initialMouseAngle = calculateAngle(centerX, centerY, mouseX, mouseY);
+    
+    setIsRotating(true);
+    setRotatingElement(elementType);
+    setInitialAngle(initialMouseAngle - currentRotation);
+    setRotationCenter({ x: centerX, y: centerY });
+  };
+
+  const handleRotationMove = (e) => {
+    if (!isRotating || !imageRef.current) return;
+    
+    const rect = imageRef.current.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    const currentMouseAngle = calculateAngle(rotationCenter.x, rotationCenter.y, mouseX, mouseY);
+    let newRotation = currentMouseAngle - initialAngle;
+    
+    // -180 to 180 の範囲に正規化
+    while (newRotation > 180) newRotation -= 360;
+    while (newRotation < -180) newRotation += 360;
+    
+    if (rotatingElement === 'text') {
+      setTextRotation(Math.round(newRotation));
+    } else if (rotatingElement === 'emoji') {
+      setEmojiRotation(Math.round(newRotation));
+    } else if (typeof rotatingElement === 'number') {
+      updateOverlayImage(rotatingElement, { rotation: Math.round(newRotation) });
+    }
+  };
+
+  const handleRotationEnd = () => {
+    setIsRotating(false);
+    setRotatingElement(null);
+    setInitialAngle(0);
+    setRotationCenter({ x: 0, y: 0 });
+  };
+
   const clearDrawing = () => {
     if (!drawingCanvasRef.current) return;
     
@@ -297,6 +486,18 @@ function App() {
   };
 
   const handleDrawingStart = (e) => {
+    // キャンバスの準備状態をチェック
+    if (!canvasReady) {
+      console.log('Canvas not ready yet, delaying drawing start');
+      // キャンバスが準備できるまで少し待つ
+      setTimeout(() => {
+        if (canvasReady) {
+          handleDrawingStart(e);
+        }
+      }, 200);
+      return;
+    }
+    
     if (drawingCanvasRef.current) {
       const canvas = drawingCanvasRef.current;
       
@@ -323,6 +524,21 @@ function App() {
     if (!context) {
       console.error('No drawing context available');
       return;
+    }
+    
+    // 初回描画の準備
+    if (drawingHistory.length === 0) {
+      // 初回描画時は現在のキャンバス状態を確認
+      const currentImageData = canvas.toDataURL();
+      const emptyCanvas = document.createElement('canvas');
+      emptyCanvas.width = canvas.width;
+      emptyCanvas.height = canvas.height;
+      const emptyImageData = emptyCanvas.toDataURL();
+      
+      // 現在のキャンバスが空でない場合はクリア
+      if (currentImageData !== emptyImageData) {
+        context.clearRect(0, 0, canvas.width, canvas.height);
+      }
     }
     
     // 前回のパスをクリア
@@ -368,19 +584,18 @@ function App() {
     // 描画完了後に履歴に保存
     setTimeout(() => {
       if (drawingCanvasRef.current && drawingCanvasRef.current.width > 0) {
-        // 初回描画の場合は空の状態を最初に追加
+        // 初回描画の場合は空の状態と描画状態を同時に設定
         if (drawingHistory.length === 0) {
+          const canvas = drawingCanvasRef.current;
           const emptyCanvas = document.createElement('canvas');
-          emptyCanvas.width = drawingCanvasRef.current.width;
-          emptyCanvas.height = drawingCanvasRef.current.height;
+          emptyCanvas.width = canvas.width;
+          emptyCanvas.height = canvas.height;
           const emptyData = emptyCanvas.toDataURL();
-          setDrawingHistory([emptyData]);
-          setHistoryIndex(0);
+          const currentData = canvas.toDataURL();
           
-          // 少し遅延してから現在の状態を保存
-          setTimeout(() => {
-            saveToHistory();
-          }, 50);
+          // 空の状態と描画状態を同時に履歴に追加
+          setDrawingHistory([emptyData, currentData]);
+          setHistoryIndex(1); // 描画状態をアクティブに
         } else {
           saveToHistory();
         }
@@ -396,6 +611,8 @@ function App() {
     }
     // プレビュー開始時はオーバーレイの選択をクリア
     setSelectedOverlayIndex(-1);
+    // キャンバス準備状態をリセット
+    setCanvasReady(false);
     setPreviewMode(true);
   };
 
@@ -502,13 +719,9 @@ function App() {
       const x = e.clientX - rect.left - dragOffset.x;
       const y = e.clientY - rect.top - dragOffset.y;
       
-      // 画像の境界内に制限（余白を考慮）
-      const margin = 50;
-      const newX = Math.max(margin, Math.min(rect.width - margin, x));
-      const newY = Math.max(margin, Math.min(rect.height - margin, y));
-      
-      console.log(`Overlay dragging to: (${newX}, ${newY})`);
-      updateOverlayImage(selectedOverlayIndex, { x: newX, y: newY });
+      // 境界制限を削除して自由に移動可能に
+      console.log(`Overlay dragging to: (${x}, ${y})`);
+      updateOverlayImage(selectedOverlayIndex, { x: x, y: y });
     } else if (isOverlayResizing && selectedOverlayIndex >= 0) {
       const deltaX = e.clientX - initialMousePos.x;
       const deltaY = e.clientY - initialMousePos.y;
@@ -554,18 +767,14 @@ function App() {
       const x = e.clientX - rect.left - dragOffset.x;
       const y = e.clientY - rect.top - dragOffset.y;
       
-      // 画像の境界内に制限（余白を考慮）
-      const margin = 50;
-      const newX = Math.max(margin, Math.min(rect.width - margin, x));
-      const newY = Math.max(margin, Math.min(rect.height - margin, y));
-      
-      console.log(`Dragging ${activeElement} to: (${newX}, ${newY})`);
+      // 境界制限を削除して自由に移動可能に
+      console.log(`Dragging ${activeElement} to: (${x}, ${y})`);
       
       // アクティブな要素に応じて位置を更新
       if (activeElement === 'text') {
-        setTextPosition({ x: newX, y: newY });
+        setTextPosition({ x: x, y: y });
       } else if (activeElement === 'emoji') {
-        setEmojiPosition({ x: newX, y: newY });
+        setEmojiPosition({ x: x, y: y });
       }
     } else if (isResizing) {
       const deltaX = e.clientX - initialMousePos.x;
@@ -707,18 +916,20 @@ function App() {
       
       if (formData.text) {
         data.append('text', formData.text);
-        // テキストの座標を送信
+        // テキストの座標と回転を送信
         data.append('x', Math.round(textPosition.x * imageScale));
         data.append('y', Math.round(textPosition.y * imageScale));
         data.append('font_size', Math.round(formData.fontSize * imageScale));
         data.append('text_color', formData.textColor);
+        data.append('text_rotation', textRotation);
       }
       if (formData.emoji) {
         data.append('emoji', formData.emoji);
-        // 絵文字の座標を送信
+        // 絵文字の座標と回転を送信
         data.append('x', Math.round(emojiPosition.x * imageScale));
         data.append('y', Math.round(emojiPosition.y * imageScale));
         data.append('emoji_size', Math.round(formData.emojiSize * imageScale));
+        data.append('emoji_rotation', emojiRotation);
       }
       
       if (baseImage) {
@@ -752,7 +963,8 @@ function App() {
                 y: Math.round(overlay.y * imageScale),
                 width: Math.round(overlay.width * imageScale),
                 height: Math.round(overlay.height * imageScale),
-                opacity: overlay.opacity
+                opacity: overlay.opacity,
+                rotation: overlay.rotation || 0
               });
             };
             reader.readAsDataURL(blob);
@@ -900,6 +1112,7 @@ function App() {
     if (drawingMode && previewMode && imageRef.current) {
       // 描画状態をリセット
       setIsDrawing(false);
+      setCanvasReady(false); // キャンバス準備状態をリセット
       // keyによる強制再マウント後、より長い遅延で初期化
       setTimeout(() => {
         if (drawingCanvasRef.current && imageRef.current) {
@@ -937,6 +1150,9 @@ function App() {
       if (isDragging || isResizing || isOverlayDragging || isOverlayResizing) {
         handleMouseMove(e);
       }
+      if (isRotating) {
+        handleRotationMove(e);
+      }
     };
 
     const handleGlobalMouseUp = () => {
@@ -954,10 +1170,12 @@ function App() {
         // オーバーレイの選択状態は維持する（リサイズハンドルを表示し続けるため）
         // setSelectedOverlayIndex(-1);
       }
+      if (isRotating) {
+        handleRotationEnd();
+      }
     };
 
-    if (previewMode && (isDragging || isResizing || isOverlayDragging || isOverlayResizing)) {
-      console.log('Adding global mouse listeners');
+    if (previewMode && (isDragging || isResizing || isOverlayDragging || isOverlayResizing || isRotating)) {
       document.addEventListener('mousemove', handleGlobalMouseMove);
       document.addEventListener('mouseup', handleGlobalMouseUp);
       
@@ -966,7 +1184,7 @@ function App() {
         document.removeEventListener('mouseup', handleGlobalMouseUp);
       };
     }
-  }, [previewMode, isDragging, isResizing, isOverlayDragging, isOverlayResizing, dragOffset, initialMousePos, initialSize, selectedOverlayIndex, formData, overlayImages]);
+  }, [previewMode, isDragging, isResizing, isOverlayDragging, isOverlayResizing, isRotating, dragOffset, initialMousePos, initialSize, selectedOverlayIndex, formData, overlayImages]);
 
   return (
     <div className="App">
@@ -1089,6 +1307,17 @@ function App() {
                             className="opacity-slider"
                           />
                         </div>
+                        <div className="overlay-opacity-control">
+                          <label>回転角度: {Math.round(overlay.rotation || 0)}°</label>
+                          <input
+                            type="range"
+                            min="-180"
+                            max="180"
+                            value={overlay.rotation || 0}
+                            onChange={(e) => updateOverlayImage(index, { rotation: parseInt(e.target.value) })}
+                            className="opacity-slider"
+                          />
+                        </div>
                         <button
                           onClick={() => removeOverlayImage(index)}
                           className="remove-overlay-button"
@@ -1162,6 +1391,17 @@ function App() {
                           value={formData.fontSize}
                           onChange={handleInputChange}
                           className="number-input text-emoji-input"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>回転角度: {textRotation}°</label>
+                        <input
+                          type="range"
+                          min="-180"
+                          max="180"
+                          value={textRotation}
+                          onChange={(e) => setTextRotation(parseInt(e.target.value))}
+                          className="thickness-slider"
                         />
                       </div>
                     </div>
@@ -1251,6 +1491,17 @@ function App() {
                           value={formData.emojiSize}
                           onChange={handleInputChange}
                           className="number-input text-emoji-input"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>回転角度: {emojiRotation}°</label>
+                        <input
+                          type="range"
+                          min="-180"
+                          max="180"
+                          value={emojiRotation}
+                          onChange={(e) => setEmojiRotation(parseInt(e.target.value))}
+                          className="thickness-slider"
                         />
                       </div>
                     </div>
@@ -1368,8 +1619,8 @@ function App() {
                     <div 
                       className="text-overlay-container"
                       style={{
-                        left: Math.max(0, textPosition.x - 100),
-                        top: Math.max(0, textPosition.y - 30),
+                        left: textPosition.x - 100,
+                        top: textPosition.y - 30,
                         width: 200,
                         height: 60,
                         cursor: drawingMode ? 'default' : (isDragging && activeElement === 'text' ? 'grabbing' : 'grab'),
@@ -1394,7 +1645,9 @@ function App() {
                             color: formData.textColor,
                             pointerEvents: 'none',
                             textAlign: 'center',
-                            lineHeight: '1.2'
+                            lineHeight: '1.2',
+                            transform: `rotate(${textRotation}deg)`,
+                            transformOrigin: 'center center'
                           }}
                         >
                           {formData.text}
@@ -1431,6 +1684,14 @@ function App() {
                                 handleResizeMouseDown(e, 'se');
                               }}
                             />
+                            <div 
+                              className="rotation-handle"
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                                handleRotationStart(e, 'text');
+                              }}
+                              title="ドラッグして回転"
+                            />
                           </>
                         )}
                       </div>
@@ -1442,8 +1703,8 @@ function App() {
                     <div 
                       className="text-overlay-container"
                       style={{
-                        left: Math.max(0, emojiPosition.x - 100),
-                        top: Math.max(0, emojiPosition.y - 100),
+                        left: emojiPosition.x - 100,
+                        top: emojiPosition.y - 100,
                         width: 200,
                         height: 200,
                         cursor: drawingMode ? 'default' : (isDragging && activeElement === 'emoji' ? 'grabbing' : 'grab'),
@@ -1461,30 +1722,36 @@ function App() {
                       onWheel={handleWheelOnTextOverlay}
                     >
                       <div className="bounding-box">
-                        <img 
-                          src={getTwemojiUrl(formData.emoji)}
-                          alt={formData.emoji}
-                          className="twemoji-preview"
-                          style={{
-                            width: `${formData.emojiSize}px`,
-                            height: `${formData.emojiSize}px`,
-                            pointerEvents: 'none'
-                          }}
-                          onError={(e) => {
-                            // Twemojiが読み込めない場合はフォールバック
-                            e.target.style.display = 'none';
-                            e.target.nextSibling.style.display = 'block';
-                          }}
-                        />
-                        <div 
-                          className="emoji-fallback"
-                          style={{
-                            fontSize: `${formData.emojiSize}px`,
-                            display: 'none',
-                            pointerEvents: 'none'
-                          }}
-                        >
-                          {formData.emoji}
+                        <div style={{
+                          transform: `rotate(${emojiRotation}deg)`,
+                          transformOrigin: 'center center',
+                          display: 'inline-block'
+                        }}>
+                          <img 
+                            src={getTwemojiUrl(formData.emoji)}
+                            alt={formData.emoji}
+                            className="twemoji-preview"
+                            style={{
+                              width: `${formData.emojiSize}px`,
+                              height: `${formData.emojiSize}px`,
+                              pointerEvents: 'none'
+                            }}
+                            onError={(e) => {
+                              // Twemojiが読み込めない場合はフォールバック
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'block';
+                            }}
+                          />
+                          <div 
+                            className="emoji-fallback"
+                            style={{
+                              fontSize: `${formData.emojiSize}px`,
+                              display: 'none',
+                              pointerEvents: 'none'
+                            }}
+                          >
+                            {formData.emoji}
+                          </div>
                         </div>
                         
                         {/* 絵文字用リサイズハンドル */}
@@ -1517,6 +1784,14 @@ function App() {
                                 e.stopPropagation();
                                 handleResizeMouseDown(e, 'se');
                               }}
+                            />
+                            <div 
+                              className="rotation-handle"
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                                handleRotationStart(e, 'emoji');
+                              }}
+                              title="ドラッグして回転"
                             />
                           </>
                         )}
@@ -1558,7 +1833,9 @@ function App() {
                           objectFit: 'contain',
                           opacity: overlay.opacity,
                           pointerEvents: 'none', // 画像自体はポインターイベントを受け取らない
-                          borderRadius: '2px'
+                          borderRadius: '2px',
+                          transform: `rotate(${overlay.rotation || 0}deg)`,
+                          transformOrigin: 'center center'
                         }}
                         draggable={false}
                       />
@@ -1593,6 +1870,14 @@ function App() {
                               e.stopPropagation();
                               handleOverlayResizeMouseDown(e, index, 'se');
                             }}
+                          />
+                          <div 
+                            className="rotation-handle"
+                            onMouseDown={(e) => {
+                              e.stopPropagation();
+                              handleRotationStart(e, index);
+                            }}
+                            title="ドラッグして回転"
                           />
                         </>
                       )}
@@ -1645,6 +1930,20 @@ function App() {
 {drawingMode ? '描画モード (絵文字・テキスト固定)' : '描画モードを有効にする'}
                   </label>
                 </div>
+                
+                {drawingMode && !canvasReady && (
+                  <div style={{ 
+                    padding: '10px', 
+                    background: '#fff3cd', 
+                    border: '1px solid #ffeaa7', 
+                    borderRadius: '4px', 
+                    marginBottom: '15px',
+                    fontSize: '14px',
+                    color: '#856404'
+                  }}>
+                    ⏳ キャンバスを準備中です... 少々お待ちください
+                  </div>
+                )}
                 
                 {drawingMode && (
                   <>

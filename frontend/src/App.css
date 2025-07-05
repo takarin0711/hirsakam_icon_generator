@@ -243,6 +243,31 @@ h1 {
   cursor: se-resize;
 }
 
+.rotation-handle {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background: #ff6b6b;
+  border: 2px solid white;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  z-index: 35;
+  cursor: grab;
+  pointer-events: auto;
+  top: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.rotation-handle:hover {
+  background: #ff5252;
+  transform: translateX(-50%) scale(1.2);
+}
+
+.rotation-handle:active {
+  cursor: grabbing;
+}
+
 .preview-info {
   background: #f8f9fa;
   border-radius: 8px;

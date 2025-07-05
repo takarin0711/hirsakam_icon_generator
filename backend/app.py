@@ -16,7 +16,12 @@ from hirsakam_icon_generator import HirsakamGenerator
 import uuid
 import uvicorn
 
-app = FastAPI(title="Hirsakam Icon Generator API", version="1.0.0")
+# ファイルサイズ制限を設定（5MB）
+app = FastAPI(
+    title="Hirsakam Icon Generator API", 
+    version="1.0.0",
+    # max_request_size は直接設定できないため、uvicornで設定する
+)
 
 # CORS設定（フロントエンドとの通信用）
 app.add_middleware(
@@ -64,6 +69,8 @@ async def generate_icon(
     font_size: int = Form(48),
     emoji_size: int = Form(164),
     text_color: str = Form("#ffffff"),
+    text_rotation: int = Form(0),  # テキストの回転角度
+    emoji_rotation: int = Form(0),  # 絵文字の回転角度
     base_image: Optional[UploadFile] = File(None),
     drawing_data: Optional[UploadFile] = File(None),
     overlay_images: Optional[str] = Form(None)  # JSON string with overlay data
@@ -234,4 +241,12 @@ async def get_gallery():
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # ファイルアップロードサイズ制限を5MBに設定
+    uvicorn.run(
+        app, 
+        host="0.0.0.0", 
+        port=8000,
+        # リクエストサイズ制限を5MB（5 * 1024 * 1024 bytes）に設定
+        limit_max_requests=1000,
+        timeout_keep_alive=30
+    )
