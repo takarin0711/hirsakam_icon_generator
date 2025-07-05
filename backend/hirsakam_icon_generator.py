@@ -339,12 +339,24 @@ class HirsakamGenerator:
             paste_x = int(x - width / 2)
             paste_y = int(y - height / 2)
             
-            # 境界チェック
-            paste_x = max(0, min(base_image.width - width, paste_x))
-            paste_y = max(0, min(base_image.height - height, paste_y))
-            
-            # オーバーレイ画像を合成
-            base_image.paste(overlay_image, (paste_x, paste_y), overlay_image)
+            # はみ出し部分をトリミングして合成（要素の自由配置を許可）
+            try:
+                base_image.paste(overlay_image, (paste_x, paste_y), overlay_image)
+            except Exception:
+                # 負の座標やはみ出しに対応
+                # より大きなキャンバスを作成して合成後にトリミング
+                expanded_width = max(base_image.width, paste_x + width)
+                expanded_height = max(base_image.height, paste_y + height)
+                expanded_canvas = Image.new('RGBA', (expanded_width, expanded_height), (0, 0, 0, 0))
+                
+                # 元の画像を配置
+                expanded_canvas.paste(base_image, (0, 0))
+                
+                # オーバーレイを配置
+                expanded_canvas.paste(overlay_image, (paste_x, paste_y), overlay_image)
+                
+                # 元のサイズにクロップ
+                base_image = expanded_canvas.crop((0, 0, base_image.width, base_image.height))
             
             # 出力パスが指定されていない場合はベース画像のパスを使用
             if output_path is None:
