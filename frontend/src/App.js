@@ -5,12 +5,17 @@ function App() {
   const [formData, setFormData] = useState({
     text: '',
     emoji: '',
-    x: 260,  // 猫の顔の中心位置に合わせる
-    y: 143,  // 猫の顔の中心位置に合わせる
     fontSize: 48,
     emojiSize: 164,
     textColor: '#ffffff'
   });
+  
+  // テキストと絵文字の個別位置
+  const [textPosition, setTextPosition] = useState({ x: 260, y: 100 });
+  const [emojiPosition, setEmojiPosition] = useState({ x: 260, y: 180 });
+  
+  // 現在操作中の要素
+  const [activeElement, setActiveElement] = useState(null); // 'text', 'emoji', null
   const [baseImage, setBaseImage] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImage, setGeneratedImage] = useState(null);
@@ -56,8 +61,8 @@ function App() {
   const handleEmojiSelect = (emoji) => {
     setFormData(prev => ({
       ...prev,
-      emoji: emoji,
-      text: '' // 絵文字を選んだらテキストをクリア
+      emoji: emoji
+      // テキストは保持（自動クリアを削除）
     }));
     setShowEmojiPicker(false);
   };
@@ -103,7 +108,6 @@ function App() {
         };
         setOverlayImages(prev => [...prev, newOverlay]);
         setSelectedOverlayIndex(overlayImages.length);
-        console.log(`New overlay added: ${width}x${height} (original: ${img.width}x${img.height})`);
       };
       img.src = URL.createObjectURL(file);
     }
@@ -156,7 +160,6 @@ function App() {
       bounds = { width, height };
     }
     
-    console.log(`calculateTextBounds: text="${text}", fontSize=${fontSize}, bounds=`, bounds);
     return bounds;
   };
 
@@ -167,27 +170,21 @@ function App() {
       const displayWidth = imageRef.current.clientWidth;
       const scale = naturalWidth / displayWidth;
       setImageScale(scale);
-      console.log(`Image loaded: ${scale} (natural: ${naturalWidth}, display: ${displayWidth})`);
-      console.log(`Image src: ${imageRef.current.src}`);
-      console.log(`Image dimensions: ${imageRef.current.clientWidth}x${imageRef.current.clientHeight}`);
       
       // 描画キャンバスを初期化（複数回の試行で確実に実行）
       setTimeout(() => {
-        console.log('Image load canvas init - attempt 1');
         if (drawingMode && previewMode && drawingCanvasRef.current) {
           initializeDrawingCanvas();
         }
       }, 200);
       
       setTimeout(() => {
-        console.log('Image load canvas init - attempt 2');
         if (drawingMode && previewMode && drawingCanvasRef.current) {
           initializeDrawingCanvas();
         }
       }, 600);
       
       setTimeout(() => {
-        console.log('Image load canvas init - attempt 3');
         if (drawingMode && previewMode && drawingCanvasRef.current) {
           initializeDrawingCanvas();
         }
@@ -203,11 +200,8 @@ function App() {
       const clientWidth = imageRef.current.clientWidth;
       const clientHeight = imageRef.current.clientHeight;
       
-      console.log('🔧 Canvas init - Image size:', clientWidth, 'x', clientHeight);
-      
       // サイズが0の場合は再試行
       if (clientWidth === 0 || clientHeight === 0) {
-        console.log('⏳ Size is 0, retrying in 500ms...');
         setTimeout(() => initializeDrawingCanvas(), 500);
         return;
       }
@@ -215,50 +209,67 @@ function App() {
       canvas.width = clientWidth;
       canvas.height = clientHeight;
       
-      console.log('✅ Canvas initialized:', canvas.width, 'x', canvas.height);
-      
       // コンテキストの設定
       context.lineCap = 'round';
       context.lineJoin = 'round';
       context.globalCompositeOperation = 'source-over';
       
+      // 描画設定を初期化（デフォルトの黒い線を防ぐ）
+      context.strokeStyle = drawingColor;
+      context.lineWidth = drawingThickness;
+      
       drawingContextRef.current = context;
       
-      // 履歴をクリア
+      // 履歴をクリア（初期状態は保存しない）
       setDrawingHistory([]);
       setHistoryIndex(-1);
-      // 初期状態を履歴に保存
-      setTimeout(() => saveToHistory(), 10);
     } else {
       console.log('❌ Canvas init failed - Canvas:', !!drawingCanvasRef.current, 'Image:', !!imageRef.current);
     }
   };
 
   const saveToHistory = () => {
-    if (!drawingCanvasRef.current) return;
+    if (!drawingCanvasRef.current) {
+      console.log('saveToHistory: No canvas available');
+      return;
+    }
     
     const canvas = drawingCanvasRef.current;
-    const imageData = canvas.toDataURL();
     
-    setDrawingHistory(prev => {
-      const newHistory = prev.slice(0, historyIndex + 1);
-      newHistory.push(imageData);
-      return newHistory;
-    });
-    setHistoryIndex(prev => prev + 1);
+    // キャンバスが有効でない場合は保存をスキップ
+    if (canvas.width === 0 || canvas.height === 0) {
+      console.log('saveToHistory: Canvas has zero size, skipping save');
+      return;
+    }
+    
+    try {
+      const imageData = canvas.toDataURL();
+      
+      
+      setDrawingHistory(prev => {
+        const newHistory = prev.slice(0, historyIndex + 1);
+        newHistory.push(imageData);
+        return newHistory;
+      });
+      setHistoryIndex(prev => prev + 1);
+    } catch (error) {
+      console.error('Failed to save canvas to history:', error);
+    }
   };
 
   const undo = () => {
-    if (historyIndex > 0) {
-      setHistoryIndex(prev => prev - 1);
-      restoreFromHistory(historyIndex - 1);
+    if (historyIndex > 0 && drawingHistory.length > 1) {
+      const newIndex = historyIndex - 1;
+      setHistoryIndex(newIndex);
+      restoreFromHistory(newIndex);
     }
   };
 
   const redo = () => {
     if (historyIndex < drawingHistory.length - 1) {
-      setHistoryIndex(prev => prev + 1);
-      restoreFromHistory(historyIndex + 1);
+      const newIndex = historyIndex + 1;
+      setHistoryIndex(newIndex);
+      restoreFromHistory(newIndex);
     }
   };
 
@@ -286,20 +297,16 @@ function App() {
   };
 
   const handleDrawingStart = (e) => {
-    console.log('🎨 DRAWING START - Mode:', drawingMode, 'Canvas:', !!drawingCanvasRef.current);
-    
     if (drawingCanvasRef.current) {
       const canvas = drawingCanvasRef.current;
-      console.log('🎨 Canvas size:', canvas.width, 'x', canvas.height);
       
       if (canvas.width === 0 || canvas.height === 0) {
-        console.error('🚨 CANVAS SIZE IS ZERO! This prevents drawing.');
+        console.error('Canvas size is zero - drawing prevented');
         return;
       }
     }
     
     if (!drawingMode || !drawingCanvasRef.current) {
-      console.log('🛑 Early return - not in drawing mode or no canvas');
       return;
     }
     
@@ -312,22 +319,24 @@ function App() {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     
-    console.log('🎨 Drawing at:', x, y);
-    
     const context = drawingContextRef.current;
     if (!context) {
-      console.error('🚨 NO DRAWING CONTEXT!');
+      console.error('No drawing context available');
       return;
     }
     
     // 前回のパスをクリア
     context.closePath();
-    // 新しいパスを開始
-    context.beginPath();
+    
+    // 描画設定を確実に適用
     context.strokeStyle = drawingColor;
     context.lineWidth = drawingThickness;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    
+    // 新しいパスを開始
+    context.beginPath();
     context.moveTo(x, y);
-    console.log('✅ Drawing started successfully');
   };
 
   const handleDrawingMove = (e) => {
@@ -347,7 +356,6 @@ function App() {
   };
 
   const handleDrawingEnd = () => {
-    console.log('Drawing end called:', { isDrawing, drawingMode });
     if (!isDrawing || !drawingMode) return;
     
     // 現在のパスを閉じる
@@ -356,8 +364,28 @@ function App() {
     }
     
     setIsDrawing(false);
-    saveToHistory();
-    console.log('Drawing ended and saved to history');
+    
+    // 描画完了後に履歴に保存
+    setTimeout(() => {
+      if (drawingCanvasRef.current && drawingCanvasRef.current.width > 0) {
+        // 初回描画の場合は空の状態を最初に追加
+        if (drawingHistory.length === 0) {
+          const emptyCanvas = document.createElement('canvas');
+          emptyCanvas.width = drawingCanvasRef.current.width;
+          emptyCanvas.height = drawingCanvasRef.current.height;
+          const emptyData = emptyCanvas.toDataURL();
+          setDrawingHistory([emptyData]);
+          setHistoryIndex(0);
+          
+          // 少し遅延してから現在の状態を保存
+          setTimeout(() => {
+            saveToHistory();
+          }, 50);
+        } else {
+          saveToHistory();
+        }
+      }
+    }, 100);
   };
 
   const startPreview = () => {
@@ -365,41 +393,36 @@ function App() {
     if (formData.text || formData.emoji) {
       const bounds = calculateTextBounds();
       setTextBounds(bounds);
-      console.log('Preview started with bounds:', bounds);
     }
     // プレビュー開始時はオーバーレイの選択をクリア
     setSelectedOverlayIndex(-1);
     setPreviewMode(true);
   };
 
-  const handleMouseDown = (e) => {
+  const handleMouseDown = (e, elementType = null) => {
     if (!previewMode) return;
     
     e.preventDefault();
     e.stopPropagation();
     
-    // ドラッグ開始時に最新のtextBoundsを強制的に再計算
-    const currentBounds = calculateTextBounds();
-    setTextBounds(currentBounds);
-    
     const canvasRect = previewRef.current.getBoundingClientRect();
     const x = e.clientX - canvasRect.left;
     const y = e.clientY - canvasRect.top;
     
-    console.log(`=== TEXT/EMOJI DRAG START ===`);
-    console.log(`Mouse down at: (${x}, ${y}), formData: (${formData.x}, ${formData.y})`);
-    console.log(`Canvas rect:`, canvasRect);
-    console.log(`Current textBounds:`, currentBounds);
-    console.log(`FormData:`, formData);
+    console.log(`=== ${elementType?.toUpperCase() || 'ELEMENT'} DRAG START ===`);
+    console.log(`Mouse down at: (${x}, ${y})`);
     
     setIsDragging(true);
-    setIsResizing(false); // リサイズ状態をクリア
-    // テキスト/絵文字操作時はオーバーレイ操作状態をクリアしない（選択状態は維持）
-    // setIsOverlayDragging(false);
-    // setIsOverlayResizing(false);
-    // setSelectedOverlayIndex(-1);
-    // 座標系を統一：クリック位置と現在の中心位置の差分を計算
-    setDragOffset({ x: x - formData.x, y: y - formData.y });
+    setIsResizing(false);
+    
+    // 要素タイプに応じてドラッグオフセットを設定
+    if (elementType === 'text') {
+      setDragOffset({ x: x - textPosition.x, y: y - textPosition.y });
+    } else if (elementType === 'emoji') {
+      setDragOffset({ x: x - emojiPosition.x, y: y - emojiPosition.y });
+    }
+    
+    setInitialMousePos({ x: e.clientX, y: e.clientY });
   };
 
   const handleResizeMouseDown = (e, direction) => {
@@ -536,13 +559,14 @@ function App() {
       const newX = Math.max(margin, Math.min(rect.width - margin, x));
       const newY = Math.max(margin, Math.min(rect.height - margin, y));
       
-      console.log(`Dragging to: (${newX}, ${newY})`);
+      console.log(`Dragging ${activeElement} to: (${newX}, ${newY})`);
       
-      setFormData(prev => ({
-        ...prev,
-        x: newX,
-        y: newY
-      }));
+      // アクティブな要素に応じて位置を更新
+      if (activeElement === 'text') {
+        setTextPosition({ x: newX, y: newY });
+      } else if (activeElement === 'emoji') {
+        setEmojiPosition({ x: newX, y: newY });
+      }
     } else if (isResizing) {
       const deltaX = e.clientX - initialMousePos.x;
       const deltaY = e.clientY - initialMousePos.y;
@@ -681,14 +705,21 @@ function App() {
     try {
       const data = new FormData();
       
-      if (formData.text) data.append('text', formData.text);
-      if (formData.emoji) data.append('emoji', formData.emoji);
-      // スケールを考慮した座標を送信
-      data.append('x', Math.round(formData.x * imageScale));
-      data.append('y', Math.round(formData.y * imageScale));
-      data.append('font_size', Math.round(formData.fontSize * imageScale));
-      data.append('emoji_size', Math.round(formData.emojiSize * imageScale));
-      data.append('text_color', formData.textColor);
+      if (formData.text) {
+        data.append('text', formData.text);
+        // テキストの座標を送信
+        data.append('x', Math.round(textPosition.x * imageScale));
+        data.append('y', Math.round(textPosition.y * imageScale));
+        data.append('font_size', Math.round(formData.fontSize * imageScale));
+        data.append('text_color', formData.textColor);
+      }
+      if (formData.emoji) {
+        data.append('emoji', formData.emoji);
+        // 絵文字の座標を送信
+        data.append('x', Math.round(emojiPosition.x * imageScale));
+        data.append('y', Math.round(emojiPosition.y * imageScale));
+        data.append('emoji_size', Math.round(formData.emojiSize * imageScale));
+      }
       
       if (baseImage) {
         data.append('base_image', baseImage);
@@ -867,24 +898,20 @@ function App() {
   // 描画モードの切り替え時にキャンバスを再初期化
   React.useEffect(() => {
     if (drawingMode && previewMode && imageRef.current) {
-      console.log('Drawing mode enabled, reinitializing canvas with forced remount');
       // 描画状態をリセット
       setIsDrawing(false);
       // keyによる強制再マウント後、より長い遅延で初期化
       setTimeout(() => {
-        console.log('Drawing mode init - attempt 1 (post-remount)');
         if (drawingCanvasRef.current && imageRef.current) {
           initializeDrawingCanvas();
         }
       }, 300);
       setTimeout(() => {
-        console.log('Drawing mode init - attempt 2 (post-remount)');
         if (drawingCanvasRef.current && imageRef.current) {
           initializeDrawingCanvas();
         }
       }, 800);
       setTimeout(() => {
-        console.log('Drawing mode init - attempt 3 (post-remount)');
         if (drawingCanvasRef.current && imageRef.current) {
           initializeDrawingCanvas();
         }
@@ -901,28 +928,23 @@ function App() {
     if ((formData.text || formData.emoji) && !isResizing) {
       const newBounds = calculateTextBounds();
       setTextBounds(newBounds);
-      console.log('textBounds updated due to form change (not during resize):', newBounds);
     }
   }, [formData.fontSize, formData.emojiSize, formData.text, formData.emoji, isResizing]);
 
   // グローバルマウスイベントリスナー
   React.useEffect(() => {
     const handleGlobalMouseMove = (e) => {
-      console.log('Global mouse move detected', { isDragging, isResizing, isOverlayDragging, isOverlayResizing });
       if (isDragging || isResizing || isOverlayDragging || isOverlayResizing) {
         handleMouseMove(e);
       }
     };
 
     const handleGlobalMouseUp = () => {
-      console.log('Global mouse up detected', { isDragging, isResizing, isOverlayDragging, isOverlayResizing });
       if (isDragging || isResizing || isOverlayDragging || isOverlayResizing) {
-        console.log('Global mouse up - stopping drag/resize');
         
         // 操作終了後にtextBoundsを再計算して同期
         const finalBounds = calculateTextBounds();
         setTextBounds(finalBounds);
-        console.log('Final textBounds after mouse up:', finalBounds);
         
         setIsDragging(false);
         setIsResizing(false);
@@ -940,7 +962,6 @@ function App() {
       document.addEventListener('mouseup', handleGlobalMouseUp);
       
       return () => {
-        console.log('Removing global mouse listeners');
         document.removeEventListener('mousemove', handleGlobalMouseMove);
         document.removeEventListener('mouseup', handleGlobalMouseUp);
       };
@@ -1117,9 +1138,8 @@ function App() {
                         <label>X座標:</label>
                         <input
                           type="number"
-                          name="x"
-                          value={formData.x}
-                          onChange={handleInputChange}
+                          value={Math.round(textPosition.x)}
+                          onChange={(e) => setTextPosition(prev => ({ ...prev, x: parseInt(e.target.value) || 0 }))}
                           className="number-input text-emoji-input"
                         />
                       </div>
@@ -1127,9 +1147,8 @@ function App() {
                         <label>Y座標:</label>
                         <input
                           type="number"
-                          name="y"
-                          value={formData.y}
-                          onChange={handleInputChange}
+                          value={Math.round(textPosition.y)}
+                          onChange={(e) => setTextPosition(prev => ({ ...prev, y: parseInt(e.target.value) || 0 }))}
                           className="number-input text-emoji-input"
                         />
                       </div>
@@ -1208,9 +1227,8 @@ function App() {
                         <label>X座標:</label>
                         <input
                           type="number"
-                          name="x"
-                          value={formData.x}
-                          onChange={handleInputChange}
+                          value={Math.round(emojiPosition.x)}
+                          onChange={(e) => setEmojiPosition(prev => ({ ...prev, x: parseInt(e.target.value) || 0 }))}
                           className="number-input text-emoji-input"
                         />
                       </div>
@@ -1218,9 +1236,8 @@ function App() {
                         <label>Y座標:</label>
                         <input
                           type="number"
-                          name="y"
-                          value={formData.y}
-                          onChange={handleInputChange}
+                          value={Math.round(emojiPosition.y)}
+                          onChange={(e) => setEmojiPosition(prev => ({ ...prev, y: parseInt(e.target.value) || 0 }))}
                           className="number-input text-emoji-input"
                         />
                       </div>
@@ -1297,31 +1314,35 @@ function App() {
                   
                   {/* 描画モード時の固定表示オーバーレイ */}
                   {drawingMode && (
-                    <div 
-                      className="fixed-overlay"
-                      style={{
-                        left: formData.x - formData.emojiSize / 2,
-                        top: formData.y - formData.emojiSize / 2,
-                        width: formData.emojiSize,
-                        height: formData.emojiSize,
-                        position: 'absolute',
-                        pointerEvents: 'none',
-                        zIndex: 8
-                      }}
-                    >
-                      {formData.emoji ? (
-                        <img 
-                          src={getTwemojiUrl(formData.emoji)}
-                          alt={formData.emoji}
-                          className="twemoji-preview"
+                    <>
+                      {/* 絵文字の固定表示 */}
+                      {formData.emoji && (
+                        <div 
                           style={{
-                            width: `${formData.emojiSize}px`,
-                            height: `${formData.emojiSize}px`,
-                            pointerEvents: 'none'
+                            left: emojiPosition.x - formData.emojiSize / 2,
+                            top: emojiPosition.y - formData.emojiSize / 2,
+                            width: formData.emojiSize,
+                            height: formData.emojiSize,
+                            position: 'absolute',
+                            pointerEvents: 'none',
+                            zIndex: 8
                           }}
-                        />
-                      ) : null}
-                      {formData.text ? (
+                        >
+                          <img 
+                            src={getTwemojiUrl(formData.emoji)}
+                            alt={formData.emoji}
+                            className="twemoji-preview"
+                            style={{
+                              width: `${formData.emojiSize}px`,
+                              height: `${formData.emojiSize}px`,
+                              pointerEvents: 'none'
+                            }}
+                          />
+                        </div>
+                      )}
+                      
+                      {/* テキストの固定表示 */}
+                      {formData.text && (
                         <div 
                           className="text-overlay"
                           style={{
@@ -1329,41 +1350,117 @@ function App() {
                             color: formData.textColor,
                             pointerEvents: 'none',
                             position: 'absolute',
-                            left: formData.x - 200,
-                            top: formData.y - formData.fontSize / 2,
-                            width: '400px',
-                            textAlign: 'center'
+                            left: textPosition.x - 100,
+                            top: textPosition.y - formData.fontSize / 2,
+                            width: '200px',
+                            textAlign: 'center',
+                            zIndex: 8
                           }}
                         >
                           {formData.text}
                         </div>
-                      ) : null}
-                    </div>
+                      )}
+                    </>
                   )}
 
-                  {/* テキストや絵文字がある場合のみ表示 */}
-                  {(formData.text || formData.emoji) && (
+                  {/* テキスト表示（独立） */}
+                  {formData.text && (
                     <div 
                       className="text-overlay-container"
                       style={{
-                        left: Math.max(0, formData.x - (Math.max(textBounds.width, 50) + 40) / 2),
-                        top: Math.max(0, formData.y - (Math.max(textBounds.height, 50) + 40) / 2),
-                        width: Math.min(500, Math.max(textBounds.width, 50) + 40),
-                        height: Math.min(500, Math.max(textBounds.height, 50) + 40),
-                        cursor: drawingMode ? 'default' : (isDragging ? 'grabbing' : 'grab'),
+                        left: Math.max(0, textPosition.x - 100),
+                        top: Math.max(0, textPosition.y - 30),
+                        width: 200,
+                        height: 60,
+                        cursor: drawingMode ? 'default' : (isDragging && activeElement === 'text' ? 'grabbing' : 'grab'),
                         userSelect: 'none',
                         pointerEvents: drawingMode ? 'none' : 'auto',
-                        display: drawingMode ? 'none' : 'block'
+                        display: drawingMode ? 'none' : 'block',
+                        border: activeElement === 'text' ? '2px dashed rgba(102, 126, 234, 0.8)' : '2px dashed rgba(102, 126, 234, 0.3)'
                       }}
-                    onMouseDown={(e) => {
-                      console.log('TEXT CONTAINER CLICKED!');
-                      e.stopPropagation();
-                      handleMouseDown(e);
-                    }}
-                    onWheel={handleWheelOnTextOverlay}
-                  >
-                    <div className="bounding-box">
-                      {formData.emoji ? (
+                      onMouseDown={(e) => {
+                        console.log('TEXT CONTAINER CLICKED!');
+                        e.stopPropagation();
+                        setActiveElement('text');
+                        handleMouseDown(e, 'text');
+                      }}
+                      onWheel={handleWheelOnTextOverlay}
+                    >
+                      <div className="bounding-box">
+                        <div 
+                          className="text-overlay"
+                          style={{
+                            fontSize: `${formData.fontSize}px`,
+                            color: formData.textColor,
+                            pointerEvents: 'none',
+                            textAlign: 'center',
+                            lineHeight: '1.2'
+                          }}
+                        >
+                          {formData.text}
+                        </div>
+                      
+                        {/* テキスト用リサイズハンドル */}
+                        {activeElement === 'text' && (
+                          <>
+                            <div 
+                              className="resize-handle corner-nw"
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                                handleResizeMouseDown(e, 'nw');
+                              }}
+                            />
+                            <div 
+                              className="resize-handle corner-ne"
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                                handleResizeMouseDown(e, 'ne');
+                              }}
+                            />
+                            <div 
+                              className="resize-handle corner-sw"
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                                handleResizeMouseDown(e, 'sw');
+                              }}
+                            />
+                            <div 
+                              className="resize-handle corner-se"
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                                handleResizeMouseDown(e, 'se');
+                              }}
+                            />
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 絵文字表示（独立） */}
+                  {formData.emoji && (
+                    <div 
+                      className="text-overlay-container"
+                      style={{
+                        left: Math.max(0, emojiPosition.x - 100),
+                        top: Math.max(0, emojiPosition.y - 100),
+                        width: 200,
+                        height: 200,
+                        cursor: drawingMode ? 'default' : (isDragging && activeElement === 'emoji' ? 'grabbing' : 'grab'),
+                        userSelect: 'none',
+                        pointerEvents: drawingMode ? 'none' : 'auto',
+                        display: drawingMode ? 'none' : 'block',
+                        border: activeElement === 'emoji' ? '2px dashed rgba(102, 126, 234, 0.8)' : '2px dashed rgba(102, 126, 234, 0.3)'
+                      }}
+                      onMouseDown={(e) => {
+                        console.log('EMOJI CONTAINER CLICKED!');
+                        e.stopPropagation();
+                        setActiveElement('emoji');
+                        handleMouseDown(e, 'emoji');
+                      }}
+                      onWheel={handleWheelOnTextOverlay}
+                    >
+                      <div className="bounding-box">
                         <img 
                           src={getTwemojiUrl(formData.emoji)}
                           alt={formData.emoji}
@@ -1379,8 +1476,6 @@ function App() {
                             e.target.nextSibling.style.display = 'block';
                           }}
                         />
-                      ) : null}
-                      {formData.emoji ? (
                         <div 
                           className="emoji-fallback"
                           style={{
@@ -1391,65 +1486,41 @@ function App() {
                         >
                           {formData.emoji}
                         </div>
-                      ) : null}
-                      {formData.text ? (
-                        <div 
-                          className="text-overlay"
-                          style={{
-                            fontSize: `${formData.fontSize}px`,
-                            color: formData.textColor,
-                            pointerEvents: 'none',
-                            maxWidth: '400px',
-                            wordWrap: 'break-word',
-                            overflowWrap: 'break-word',
-                            hyphens: 'auto',
-                            lineHeight: '1.2',
-                            whiteSpace: (() => {
-                              const fontSize = formData.fontSize;
-                              const charWidth = fontSize * 0.6;
-                              const totalWidth = formData.text.length * charWidth;
-                              return totalWidth > 400 ? 'normal' : 'nowrap';
-                            })()
-                          }}
-                        >
-                          {formData.text}
-                        </div>
-                      ) : null}
-                      
-                      {/* 四隅のリサイズハンドル */}
-                      <div 
-                        className="resize-handle corner-nw"
-                        onMouseDown={(e) => {
-                          console.log('RESIZE HANDLE NW CLICKED!');
-                          e.stopPropagation();
-                          handleResizeMouseDown(e, 'nw');
-                        }}
-                      />
-                      <div 
-                        className="resize-handle corner-ne"
-                        onMouseDown={(e) => {
-                          console.log('RESIZE HANDLE NE CLICKED!');
-                          e.stopPropagation();
-                          handleResizeMouseDown(e, 'ne');
-                        }}
-                      />
-                      <div 
-                        className="resize-handle corner-sw"
-                        onMouseDown={(e) => {
-                          console.log('RESIZE HANDLE SW CLICKED!');
-                          e.stopPropagation();
-                          handleResizeMouseDown(e, 'sw');
-                        }}
-                      />
-                      <div 
-                        className="resize-handle corner-se"
-                        onMouseDown={(e) => {
-                          console.log('RESIZE HANDLE SE CLICKED!');
-                          e.stopPropagation();
-                          handleResizeMouseDown(e, 'se');
-                        }}
-                      />
-                    </div>
+                        
+                        {/* 絵文字用リサイズハンドル */}
+                        {activeElement === 'emoji' && (
+                          <>
+                            <div 
+                              className="resize-handle corner-nw"
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                                handleResizeMouseDown(e, 'nw');
+                              }}
+                            />
+                            <div 
+                              className="resize-handle corner-ne"
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                                handleResizeMouseDown(e, 'ne');
+                              }}
+                            />
+                            <div 
+                              className="resize-handle corner-sw"
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                                handleResizeMouseDown(e, 'sw');
+                              }}
+                            />
+                            <div 
+                              className="resize-handle corner-se"
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                                handleResizeMouseDown(e, 'se');
+                              }}
+                            />
+                          </>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -1472,7 +1543,6 @@ function App() {
                         borderRadius: '4px'
                       }}
                       onMouseDown={(e) => {
-                        console.log(`Overlay container clicked: ${index}, drawingMode: ${drawingMode}`);
                         if (!drawingMode) {
                           e.stopPropagation();
                           handleOverlayMouseDown(e, index);
@@ -1499,7 +1569,6 @@ function App() {
                           <div 
                             className="resize-handle corner-nw"
                             onMouseDown={(e) => {
-                              console.log(`Overlay resize handle NW clicked for index ${index}`);
                               e.stopPropagation();
                               handleOverlayResizeMouseDown(e, index, 'nw');
                             }}
@@ -1533,13 +1602,12 @@ function App() {
                 {(formData.text || formData.emoji) && (
                   <div className="preview-info">
                     <div className="current-settings">
-                      <span>位置: ({Math.round(formData.x)}, {Math.round(formData.y)})</span>
-                      <span>
-                        {formData.emoji 
-                          ? `絵文字サイズ: ${formData.emojiSize}px` 
-                          : `フォントサイズ: ${formData.fontSize}px`
-                        }
-                      </span>
+                      {formData.text && (
+                        <span>テキスト位置: ({Math.round(textPosition.x)}, {Math.round(textPosition.y)}) サイズ: {formData.fontSize}px</span>
+                      )}
+                      {formData.emoji && (
+                        <span>絵文字位置: ({Math.round(emojiPosition.x)}, {Math.round(emojiPosition.y)}) サイズ: {formData.emojiSize}px</span>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1626,53 +1694,6 @@ function App() {
                         className="drawing-button clear-button"
                       >
                         🗑️ クリア
-                      </button>
-                      <button
-                        onClick={() => {
-                          console.log('=== CANVAS DEBUG INFO ===');
-                          console.log('Drawing mode:', drawingMode);
-                          console.log('Preview mode:', previewMode);
-                          console.log('Base image:', baseImage ? baseImage.name : 'default');
-                          
-                          if (drawingCanvasRef.current) {
-                            const canvas = drawingCanvasRef.current;
-                            console.log('Canvas:', {
-                              width: canvas.width,
-                              height: canvas.height,
-                              style: canvas.style.cssText,
-                              className: canvas.className,
-                              pointerEvents: getComputedStyle(canvas).pointerEvents
-                            });
-                          } else {
-                            console.log('No canvas ref');
-                          }
-                          
-                          if (drawingContextRef.current) {
-                            console.log('Context exists:', !!drawingContextRef.current);
-                          } else {
-                            console.log('No drawing context');
-                          }
-                          
-                          if (imageRef.current) {
-                            console.log('Image:', {
-                              src: imageRef.current.src,
-                              naturalWidth: imageRef.current.naturalWidth,
-                              naturalHeight: imageRef.current.naturalHeight,
-                              clientWidth: imageRef.current.clientWidth,
-                              clientHeight: imageRef.current.clientHeight
-                            });
-                          } else {
-                            console.log('No image ref');
-                          }
-                          
-                          // 強制的にキャンバスを再初期化
-                          console.log('Force reinitializing canvas...');
-                          initializeDrawingCanvas();
-                        }}
-                        className="drawing-button"
-                        style={{ background: '#17a2b8', color: 'white' }}
-                      >
-                        🔧 Debug
                       </button>
                     </div>
                   </>
