@@ -310,6 +310,61 @@ class HirsakamGenerator:
             # エラーの場合は元の画像をそのまま返す
             return base_image_path
 
+    def add_overlay_image(self, base_image_path, overlay_image_path, x, y, width, height, opacity, output_path=None):
+        """オーバーレイ画像を既存の画像に合成"""
+        try:
+            # ベース画像を読み込み
+            base_image = Image.open(base_image_path)
+            
+            # オーバーレイ画像を読み込み
+            overlay_image = Image.open(overlay_image_path)
+            
+            # オーバーレイ画像を指定サイズにリサイズ
+            overlay_image = overlay_image.resize((int(width), int(height)), Image.Resampling.LANCZOS)
+            
+            # 両方の画像をRGBAモードに変換
+            if base_image.mode != 'RGBA':
+                base_image = base_image.convert('RGBA')
+            if overlay_image.mode != 'RGBA':
+                overlay_image = overlay_image.convert('RGBA')
+            
+            # 透明度を適用
+            if opacity < 1.0:
+                # アルファチャンネルに透明度を適用
+                alpha = overlay_image.split()[-1]
+                alpha = alpha.point(lambda p: int(p * opacity))
+                overlay_image.putalpha(alpha)
+            
+            # 位置を調整（中央寄せから左上基準に変換）
+            paste_x = int(x - width / 2)
+            paste_y = int(y - height / 2)
+            
+            # 境界チェック
+            paste_x = max(0, min(base_image.width - width, paste_x))
+            paste_y = max(0, min(base_image.height - height, paste_y))
+            
+            # オーバーレイ画像を合成
+            base_image.paste(overlay_image, (paste_x, paste_y), overlay_image)
+            
+            # 出力パスが指定されていない場合はベース画像のパスを使用
+            if output_path is None:
+                output_path = base_image_path
+            
+            # 画像を保存（RGBAの場合はRGBに変換）
+            if base_image.mode == 'RGBA':
+                # 白背景でRGBに変換
+                rgb_image = Image.new('RGB', base_image.size, (255, 255, 255))
+                rgb_image.paste(base_image, mask=base_image.split()[-1])
+                base_image = rgb_image
+            
+            base_image.save(output_path, "JPEG", quality=95)
+            return output_path
+            
+        except Exception as e:
+            print(f"オーバーレイ画像合成エラー: {e}")
+            # エラーの場合は元の画像をそのまま返す
+            return base_image_path
+
 def main():
     parser = argparse.ArgumentParser(description="Hirsakam コラ画像ジェネレーター")
     parser.add_argument("--base", default="hirsakam.jpg", help="ベース画像のパス")

@@ -65,7 +65,8 @@ async def generate_icon(
     emoji_size: int = Form(164),
     text_color: str = Form("#ffffff"),
     base_image: Optional[UploadFile] = File(None),
-    drawing_data: Optional[UploadFile] = File(None)
+    drawing_data: Optional[UploadFile] = File(None),
+    overlay_images: Optional[str] = Form(None)  # JSON string with overlay data
 ):
     """
     アイコンを生成する
@@ -137,6 +138,42 @@ async def generate_icon(
             # 描画一時ファイルを削除
             if os.path.exists(drawing_temp_path):
                 os.remove(drawing_temp_path)
+
+        # オーバーレイ画像がある場合は合成
+        if overlay_images:
+            import json
+            print("Overlay images data received, processing...")
+            try:
+                overlay_data = json.loads(overlay_images)
+                for overlay in overlay_data:
+                    # オーバーレイ画像をbase64からデコードして保存
+                    import base64
+                    overlay_id = str(uuid.uuid4())
+                    overlay_temp_path = os.path.join(UPLOAD_DIR, f"overlay_{overlay_id}.png")
+                    
+                    # base64データから画像ファイルを作成
+                    image_data = base64.b64decode(overlay['data'].split(',')[1])
+                    with open(overlay_temp_path, "wb") as f:
+                        f.write(image_data)
+                    
+                    # オーバーレイ画像を合成
+                    result_path = generator.add_overlay_image(
+                        result_path, 
+                        overlay_temp_path, 
+                        overlay['x'], 
+                        overlay['y'], 
+                        overlay['width'], 
+                        overlay['height'], 
+                        overlay['opacity'],
+                        output_path
+                    )
+                    
+                    # 一時ファイルを削除
+                    if os.path.exists(overlay_temp_path):
+                        os.remove(overlay_temp_path)
+                        
+            except Exception as e:
+                print(f"Error processing overlay images: {e}")
         
         # 一時ファイルを削除（アップロードされたファイルのみ）
         hirsakam_default = os.path.join("..", "hirsakam.jpg")
