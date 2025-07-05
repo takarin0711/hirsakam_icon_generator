@@ -2,6 +2,9 @@
 
 Hirsakamの画像に絵文字、テキスト、フリーハンド描画を追加してオリジナルコラ画像を生成するWebアプリケーションです。
 
+Hirsakamとは→下の猫ちゃんです。可愛いですね。
+![Image](https://github.com/user-attachments/assets/9e507d87-400b-467b-b8b6-e234c4c69135)
+
 ## 📁 ディレクトリ構造
 
 ```
