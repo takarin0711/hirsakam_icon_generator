@@ -75,7 +75,8 @@ async def generate_icon(
     emoji_rotation: int = Form(0),  # 絵文字の回転角度
     base_image: Optional[UploadFile] = File(None),
     drawing_data: Optional[UploadFile] = File(None),
-    overlay_images: Optional[str] = Form(None)  # JSON string with overlay data
+    overlay_images: Optional[str] = Form(None),  # JSON string with overlay data
+    layer_order: Optional[str] = Form(None)  # JSON string with layer order
 ):
     """
     アイコンを生成する
@@ -110,75 +111,91 @@ async def generate_icon(
         result_path = output_path
         generator.copy_base_image(result_path)
         
-        # テキストを追加
-        if text:
-            # カラーコードをRGBタプルに変換
-            def hex_to_rgb(hex_color):
-                hex_color = hex_color.lstrip('#')
-                return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-            
-            color_rgb = hex_to_rgb(text_color)
-            result_path = generator.add_text_to_image(
-                result_path,
-                text, 
-                (text_x, text_y), 
-                color=color_rgb,
-                font_size=font_size,
-                rotation=text_rotation,
-                output_path=result_path
-            )
+        # レイヤー順序を解析（デフォルト: ['text', 'emoji', 'overlay']）
+        import json
+        import base64
+        try:
+            if layer_order:
+                layer_order_list = json.loads(layer_order)
+            else:
+                layer_order_list = ['text', 'emoji', 'overlay']
+        except:
+            layer_order_list = ['text', 'emoji', 'overlay']
         
-        # 絵文字を追加
-        if emoji:
-            result_path = generator.add_emoji_to_image(
-                result_path,
-                emoji, 
-                (emoji_x, emoji_y), 
-                emoji_size,
-                rotation=emoji_rotation,
-                output_path=result_path
-            )
+        print(f"Layer order: {layer_order_list}")
+        
+        # レイヤー順序に基づいて処理
+        def process_layer(layer_type, current_path):
+            if layer_type == 'text' and text:
+                # カラーコードをRGBタプルに変換
+                def hex_to_rgb(hex_color):
+                    hex_color = hex_color.lstrip('#')
+                    return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+                
+                color_rgb = hex_to_rgb(text_color)
+                return generator.add_text_to_image(
+                    current_path,
+                    text, 
+                    (text_x, text_y), 
+                    color=color_rgb,
+                    font_size=font_size,
+                    rotation=text_rotation,
+                    output_path=current_path
+                )
+            elif layer_type == 'emoji' and emoji:
+                return generator.add_emoji_to_image(
+                    current_path,
+                    emoji, 
+                    (emoji_x, emoji_y), 
+                    emoji_size,
+                    rotation=emoji_rotation,
+                    output_path=current_path
+                )
+            elif layer_type == 'overlay' and overlay_images:
+                # オーバーレイ画像を処理
+                print("Overlay images data received, processing...")
+                current_result_path = current_path
+                try:
+                    overlay_data = json.loads(overlay_images)
+                    for overlay in overlay_data:
+                        # オーバーレイ画像をbase64からデコードして保存
+                        overlay_id = str(uuid.uuid4())
+                        overlay_temp_path = os.path.join(UPLOAD_DIR, f"overlay_{overlay_id}.png")
+                        
+                        # base64データから画像ファイルを作成
+                        image_data = base64.b64decode(overlay['data'].split(',')[1])
+                        with open(overlay_temp_path, "wb") as f:
+                            f.write(image_data)
+                        
+                        # オーバーレイ画像を合成
+                        current_result_path = generator.add_overlay_image(
+                            current_result_path, 
+                            overlay_temp_path, 
+                            overlay['x'], 
+                            overlay['y'], 
+                            overlay['width'], 
+                            overlay['height'], 
+                            overlay['opacity'],
+                            overlay.get('rotation', 0),
+                            current_result_path
+                        )
+                        
+                        # 一時ファイルを削除
+                        if os.path.exists(overlay_temp_path):
+                            os.remove(overlay_temp_path)
+                            
+                except Exception as e:
+                    print(f"Error processing overlay images: {e}")
+                return current_result_path
+            return current_path
+        
+        # レイヤー順序に従って処理
+        for layer_type in layer_order_list:
+            result_path = process_layer(layer_type, result_path)
         
         # コンテンツが何もない場合のエラーチェック
         if not text and not emoji and not drawing_data and not overlay_images:
             raise HTTPException(status_code=400, detail="テキスト、絵文字、描画、またはオーバーレイ画像のいずれかを指定してください")
-        
-        # オーバーレイ画像がある場合は合成（描画データより先に処理）
-        if overlay_images:
-            import json
-            print("Overlay images data received, processing...")
-            try:
-                overlay_data = json.loads(overlay_images)
-                for overlay in overlay_data:
-                    # オーバーレイ画像をbase64からデコードして保存
-                    import base64
-                    overlay_id = str(uuid.uuid4())
-                    overlay_temp_path = os.path.join(UPLOAD_DIR, f"overlay_{overlay_id}.png")
-                    
-                    # base64データから画像ファイルを作成
-                    image_data = base64.b64decode(overlay['data'].split(',')[1])
-                    with open(overlay_temp_path, "wb") as f:
-                        f.write(image_data)
-                    
-                    # オーバーレイ画像を合成
-                    result_path = generator.add_overlay_image(
-                        result_path, 
-                        overlay_temp_path, 
-                        overlay['x'], 
-                        overlay['y'], 
-                        overlay['width'], 
-                        overlay['height'], 
-                        overlay['opacity'],
-                        overlay.get('rotation', 0),
-                        output_path
-                    )
-                    
-                    # 一時ファイルを削除
-                    if os.path.exists(overlay_temp_path):
-                        os.remove(overlay_temp_path)
-                        
-            except Exception as e:
-                print(f"Error processing overlay images: {e}")
 
         # 描画データがある場合は最後に合成（最上位レイヤー）
         if drawing_data:
