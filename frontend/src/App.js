@@ -760,7 +760,7 @@ function App() {
     // setSelectedOverlayIndex(-1);
     setResizeDirection(direction);
     setInitialMousePos({ x: e.clientX, y: e.clientY });
-    setInitialSize(formData.emoji ? formData.emojiSize : formData.fontSize);
+    setInitialSize(activeElement === 'emoji' ? formData.emojiSize : formData.fontSize);
   };
 
   const handleOverlayMouseDown = (e, overlayIndex) => {
@@ -883,7 +883,7 @@ function App() {
           sizeDelta = (deltaX + deltaY) / 2;
       }
       
-      if (formData.emoji) {
+      if (activeElement === 'emoji' && formData.emoji) {
         const newSize = Math.max(20, Math.min(500, initialSize + sizeDelta));
         console.log(`Resizing emoji: ${initialSize} -> ${newSize} (delta: ${sizeDelta}, current: ${formData.emojiSize})`);
         
@@ -897,7 +897,7 @@ function App() {
         const newBounds = { width: newSize, height: newSize };
         setTextBounds(newBounds);
         console.log('Updated textBounds for emoji:', newBounds);
-      } else if (formData.text) {
+      } else if (activeElement === 'text' && formData.text) {
         const newSize = Math.max(12, Math.min(200, initialSize + sizeDelta / 3));
         console.log(`Resizing text: ${initialSize} -> ${newSize} (delta: ${sizeDelta}, current: ${formData.fontSize})`);
         
@@ -930,49 +930,6 @@ function App() {
     }
   };
 
-  const handleWheelOnTextOverlay = (e) => {
-    if (!previewMode) return;
-    
-    e.preventDefault();
-    e.stopPropagation();
-    const delta = e.deltaY > 0 ? -5 : 5;
-    
-    if (formData.emoji) {
-      const newSize = Math.max(20, Math.min(500, formData.emojiSize + delta));
-      setFormData(prev => ({
-        ...prev,
-        emojiSize: newSize
-      }));
-      const newBounds = { width: newSize, height: newSize };
-      setTextBounds(newBounds);
-      console.log('Wheel resize emoji bounds:', newBounds);
-    } else if (formData.text) {
-      const newSize = Math.max(12, Math.min(200, formData.fontSize + delta));
-      setFormData(prev => ({
-        ...prev,
-        fontSize: newSize
-      }));
-      // テキストの場合は動的に計算（改行を考慮）
-      const text = formData.text;
-      const maxWidth = 400;
-      const charWidth = newSize * 0.6;
-      const totalWidth = text.length * charWidth;
-      
-      let width, height;
-      if (totalWidth <= maxWidth) {
-        width = Math.max(totalWidth, newSize);
-        height = newSize * 1.2;
-      } else {
-        width = maxWidth;
-        const lines = Math.ceil(totalWidth / maxWidth);
-        height = newSize * 1.2 * lines;
-      }
-      
-      const newBounds = { width, height };
-      setTextBounds(newBounds);
-      console.log('Wheel resize text bounds:', newBounds);
-    }
-  };
 
   const getBaseImageUrl = () => {
     if (baseImage) {
@@ -1687,55 +1644,75 @@ function App() {
                   />
                   
                   {/* 描画モード時の固定表示オーバーレイ */}
+                  {/* 注意: 座標ズレ防止のため、通常表示と全く同じDOM構造を使用 */}
+                  {/* border: transparentで視覚的には見えないが、レイアウト計算は通常表示と一致 */}
                   {drawingMode && (
                     <>
                       {/* 絵文字の固定表示 */}
                       {formData.emoji && (
                         <div 
+                          className="text-overlay-container"
                           style={{
-                            left: emojiPosition.x - formData.emojiSize / 2,
-                            top: emojiPosition.y - formData.emojiSize / 2,
-                            width: formData.emojiSize,
-                            height: formData.emojiSize,
-                            position: 'absolute',
+                            left: emojiPosition.x - 100,
+                            top: emojiPosition.y - 100,
+                            width: 200,
+                            height: 200,
                             pointerEvents: 'none',
                             zIndex: getLayerZIndex('emoji'),
-                            transform: `rotate(${emojiRotation}deg)`,
-                            transformOrigin: 'center center'
+                            border: '2px dashed transparent' // 透明ボーダーで座標計算を通常表示と一致
                           }}
                         >
-                          <img 
-                            src={getTwemojiUrl(formData.emoji)}
-                            alt={formData.emoji}
-                            className="twemoji-preview"
-                            style={{
-                              width: `${formData.emojiSize}px`,
-                              height: `${formData.emojiSize}px`,
-                              pointerEvents: 'none'
-                            }}
-                          />
+                          <div className="bounding-box" style={{ border: '2px dashed transparent' }}> {/* 透明ボーダーでレイアウト保持 */}
+                            <div style={{
+                              transform: `rotate(${emojiRotation}deg)`,
+                              transformOrigin: 'center center',
+                              display: 'inline-block'
+                            }}>
+                              <img 
+                                src={getTwemojiUrl(formData.emoji)}
+                                alt={formData.emoji}
+                                className="twemoji-preview"
+                                style={{
+                                  width: `${formData.emojiSize}px`,
+                                  height: `${formData.emojiSize}px`,
+                                  pointerEvents: 'none'
+                                }}
+                              />
+                            </div>
+                          </div>
                         </div>
                       )}
                       
                       {/* テキストの固定表示 */}
                       {formData.text && (
                         <div 
-                          className="text-overlay"
+                          className="text-overlay-container"
                           style={{
-                            fontSize: `${formData.fontSize}px`,
-                            color: formData.textColor,
-                            pointerEvents: 'none',
-                            position: 'absolute',
                             left: textPosition.x - 100,
-                            top: textPosition.y - formData.fontSize / 2,
-                            width: '200px',
-                            textAlign: 'center',
+                            top: textPosition.y - 30,
+                            width: 200,
+                            height: 60,
+                            pointerEvents: 'none',
                             zIndex: getLayerZIndex('text'),
-                            transform: `rotate(${textRotation}deg)`,
-                            transformOrigin: 'center center'
+                            border: '2px dashed transparent' // 透明ボーダーで座標計算を通常表示と一致
                           }}
                         >
-                          {formData.text}
+                          <div className="bounding-box" style={{ border: '2px dashed transparent' }}> {/* 透明ボーダーでレイアウト保持 */}
+                            <div 
+                              className="text-overlay"
+                              style={{
+                                fontSize: `${formData.fontSize}px`,
+                                color: formData.textColor,
+                                pointerEvents: 'none',
+                                textAlign: 'center',
+                                lineHeight: '1.2',
+                                transform: `rotate(${textRotation}deg)`,
+                                transformOrigin: 'center center'
+                              }}
+                            >
+                              {formData.text}
+                            </div>
+                          </div>
                         </div>
                       )}
                     </>
@@ -1763,7 +1740,6 @@ function App() {
                         setSelectedOverlayIndex(-1); // オーバーレイの選択を解除
                         handleMouseDown(e, 'text');
                       }}
-                      onWheel={handleWheelOnTextOverlay}
                     >
                       <div className="bounding-box">
                         <div 
@@ -1848,7 +1824,6 @@ function App() {
                         setSelectedOverlayIndex(-1); // オーバーレイの選択を解除
                         handleMouseDown(e, 'emoji');
                       }}
-                      onWheel={handleWheelOnTextOverlay}
                     >
                       <div className="bounding-box">
                         <div style={{
