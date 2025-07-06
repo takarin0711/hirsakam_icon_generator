@@ -521,6 +521,7 @@ h1 {
   left: 0;
   cursor: crosshair;
   pointer-events: none;
+  z-index: 1000;
 }
 
 .drawing-canvas.drawing-active {

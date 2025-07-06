@@ -64,8 +64,10 @@ async def root():
 async def generate_icon(
     text: Optional[str] = Form(None),
     emoji: Optional[str] = Form(None),
-    x: int = Form(260),  # 猫の顔の中心位置
-    y: int = Form(143),  # 猫の顔の中心位置
+    text_x: int = Form(260),  # テキストのX座標
+    text_y: int = Form(143),  # テキストのY座標
+    emoji_x: int = Form(260),  # 絵文字のX座標
+    emoji_y: int = Form(143),  # 絵文字のY座標
     font_size: int = Form(48),
     emoji_size: int = Form(164),
     text_color: str = Form("#ffffff"),
@@ -79,7 +81,7 @@ async def generate_icon(
     アイコンを生成する
     """
     try:
-        print(f"Debug: text={text}, emoji={emoji}, x={x}, y={y}, font_size={font_size}, emoji_size={emoji_size}, text_color={text_color}")
+        print(f"Debug: text={text}, emoji={emoji}, text_pos=({text_x},{text_y}), emoji_pos=({emoji_x},{emoji_y}), font_size={font_size}, emoji_size={emoji_size}, text_color={text_color}")
         
         # ベース画像のパス（親ディレクトリから参照）
         base_image_path = os.path.join("..", "hirsakam.jpg")
@@ -104,49 +106,44 @@ async def generate_icon(
         output_id = str(uuid.uuid4())
         output_path = os.path.join("..", "output", f"hirsakam_{output_id}.jpg")
         
-        # 生成処理
-        if emoji:
-            result_path = generator.generate_with_emoji(
-                emoji, 
-                (x, y), 
-                emoji_size, 
-                output_path
-            )
-        elif text:
+        # ベース画像をコピーして開始
+        result_path = output_path
+        generator.copy_base_image(result_path)
+        
+        # テキストを追加
+        if text:
             # カラーコードをRGBタプルに変換
             def hex_to_rgb(hex_color):
                 hex_color = hex_color.lstrip('#')
                 return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
             
             color_rgb = hex_to_rgb(text_color)
-            result_path = generator.generate_custom(
+            result_path = generator.add_text_to_image(
+                result_path,
                 text, 
-                (x, y), 
+                (text_x, text_y), 
                 color=color_rgb,
-                font_size=font_size, 
-                output_path=output_path
+                font_size=font_size,
+                rotation=text_rotation,
+                output_path=result_path
             )
-        else:
-            raise HTTPException(status_code=400, detail="テキストまたは絵文字を指定してください")
         
-        # 描画データがある場合は合成
-        if drawing_data:
-            print("Drawing data received, processing...")
-            # 描画データを一時ファイルとして保存
-            drawing_id = str(uuid.uuid4())
-            drawing_temp_path = os.path.join(UPLOAD_DIR, f"drawing_{drawing_id}.png")
-            
-            with open(drawing_temp_path, "wb") as buffer:
-                shutil.copyfileobj(drawing_data.file, buffer)
-            
-            # 描画データを合成
-            result_path = generator.add_drawing_overlay(result_path, drawing_temp_path, output_path)
-            
-            # 描画一時ファイルを削除
-            if os.path.exists(drawing_temp_path):
-                os.remove(drawing_temp_path)
-
-        # オーバーレイ画像がある場合は合成
+        # 絵文字を追加
+        if emoji:
+            result_path = generator.add_emoji_to_image(
+                result_path,
+                emoji, 
+                (emoji_x, emoji_y), 
+                emoji_size,
+                rotation=emoji_rotation,
+                output_path=result_path
+            )
+        
+        # コンテンツが何もない場合のエラーチェック
+        if not text and not emoji and not drawing_data and not overlay_images:
+            raise HTTPException(status_code=400, detail="テキスト、絵文字、描画、またはオーバーレイ画像のいずれかを指定してください")
+        
+        # オーバーレイ画像がある場合は合成（描画データより先に処理）
         if overlay_images:
             import json
             print("Overlay images data received, processing...")
@@ -172,6 +169,7 @@ async def generate_icon(
                         overlay['width'], 
                         overlay['height'], 
                         overlay['opacity'],
+                        overlay.get('rotation', 0),
                         output_path
                     )
                     
@@ -181,6 +179,23 @@ async def generate_icon(
                         
             except Exception as e:
                 print(f"Error processing overlay images: {e}")
+
+        # 描画データがある場合は最後に合成（最上位レイヤー）
+        if drawing_data:
+            print("Drawing data received, processing...")
+            # 描画データを一時ファイルとして保存
+            drawing_id = str(uuid.uuid4())
+            drawing_temp_path = os.path.join(UPLOAD_DIR, f"drawing_{drawing_id}.png")
+            
+            with open(drawing_temp_path, "wb") as buffer:
+                shutil.copyfileobj(drawing_data.file, buffer)
+            
+            # 描画データを合成
+            result_path = generator.add_drawing_overlay(result_path, drawing_temp_path, output_path)
+            
+            # 描画一時ファイルを削除
+            if os.path.exists(drawing_temp_path):
+                os.remove(drawing_temp_path)
         
         # 一時ファイルを削除（アップロードされたファイルのみ）
         hirsakam_default = os.path.join("..", "hirsakam.jpg")

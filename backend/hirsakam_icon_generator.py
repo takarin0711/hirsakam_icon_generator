@@ -175,8 +175,73 @@ class HirsakamGenerator:
             response = requests.get(url, timeout=10)
             if response.status_code == 200:
                 emoji_img = Image.open(BytesIO(response.content))
-                # サイズを調整
+                print(f"ダウンロードした絵文字: {emoji_char}, モード: {emoji_img.mode}, サイズ: {emoji_img.size}")
+                
+                # 常にRGBAモードに変換
+                if emoji_img.mode != 'RGBA':
+                    emoji_img = emoji_img.convert('RGBA')
+                    print(f"RGBAモードに変換: {emoji_img.mode}")
+                
+                # 透明性の処理（背景を透明にする）
+                emoji_array = list(emoji_img.getdata())
+                cleaned_data = []
+                
+                # 最も多い透明ピクセルの色を背景色として検出
+                transparent_colors = {}
+                for pixel in emoji_array:
+                    r, g, b, a = pixel
+                    if a == 0:  # 完全透明
+                        color_key = (r, g, b)
+                        transparent_colors[color_key] = transparent_colors.get(color_key, 0) + 1
+                
+                # 最も多い透明色を背景色とする
+                background_color = None
+                if transparent_colors:
+                    background_color = max(transparent_colors.items(), key=lambda x: x[1])[0]
+                    print(f"検出された背景色: RGB{background_color}, 出現回数: {transparent_colors[background_color]}")
+                
+                for pixel in emoji_array:
+                    r, g, b, a = pixel
+                    
+                    # 背景色またはほぼ透明なピクセルを除去
+                    is_background = (
+                        a == 0 or  # 完全透明
+                        (background_color and (r, g, b) == background_color) or  # 背景色
+                        a < 32  # ほぼ透明
+                    )
+                    
+                    if is_background:
+                        # 背景は完全透明
+                        cleaned_data.append((0, 0, 0, 0))
+                    else:
+                        # 絵文字部分は不透明
+                        cleaned_data.append((r, g, b, 255))
+                
+                emoji_img.putdata(cleaned_data)
+                
+                # サイズを調整（透明性処理後）
                 emoji_img = emoji_img.resize((size, size), Image.Resampling.LANCZOS)
+                
+                # リサイズ後に再度透明性を修正（リサイズで中間値が生じるため）
+                resized_array = list(emoji_img.getdata())
+                final_data = []
+                
+                for pixel in resized_array:
+                    r, g, b, a = pixel
+                    # アルファ値が低い場合は完全透明に
+                    if a < 128:
+                        final_data.append((0, 0, 0, 0))
+                    else:
+                        # 絵文字部分は完全不透明に
+                        final_data.append((r, g, b, 255))
+                
+                emoji_img.putdata(final_data)
+                
+                # 最終的な透明性確認
+                alpha = emoji_img.split()[-1]
+                alpha_values = set(alpha.getdata())
+                print(f"処理後アルファ値: {alpha_values}")
+                
                 return emoji_img
             else:
                 print(f"絵文字画像の取得に失敗: {url}")
@@ -212,9 +277,11 @@ class HirsakamGenerator:
             # 絵文字を貼り付け
             base_img.paste(emoji_img, (x, y), emoji_img)
             
-            # RGBに戻す
+            # RGBに戻す（元の画像の背景を保持）
             if image.mode != 'RGBA':
-                rgb_result = Image.new('RGB', base_img.size, (255, 255, 255))
+                rgb_result = Image.new('RGB', base_img.size)
+                # 元の画像をベースとして使用
+                rgb_result.paste(image.convert('RGB'), (0, 0))
                 rgb_result.paste(base_img, mask=base_img.split()[-1])
                 return rgb_result
             
@@ -238,10 +305,11 @@ class HirsakamGenerator:
             os.makedirs("output", exist_ok=True)
             output_path = f"output/hirsakam_emoji_{ord(emoji_char):x}.jpg"
         
-        # 画像を保存（RGBAの場合はRGBに変換）
+        # 画像を保存（RGBAの場合はRGBに変換、元の背景を保持）
         if image.mode == 'RGBA':
-            # 白背景でRGBに変換
-            rgb_image = Image.new('RGB', image.size, (255, 255, 255))
+            # 元のベース画像の背景を保持してRGBに変換
+            base_image = self.load_base_image()
+            rgb_image = base_image.convert('RGB')
             rgb_image.paste(image, mask=image.split()[-1])
             image = rgb_image
         
@@ -260,10 +328,11 @@ class HirsakamGenerator:
             os.makedirs("output", exist_ok=True)
             output_path = f"output/hirsakam_custom.jpg"
         
-        # 画像を保存（RGBAの場合はRGBに変換）
+        # 画像を保存（RGBAの場合はRGBに変換、元の背景を保持）
         if image.mode == 'RGBA':
-            # 白背景でRGBに変換
-            rgb_image = Image.new('RGB', image.size, (255, 255, 255))
+            # 元のベース画像の背景を保持してRGBに変換
+            base_image = self.load_base_image()
+            rgb_image = base_image.convert('RGB')
             rgb_image.paste(image, mask=image.split()[-1])
             image = rgb_image
         
@@ -295,10 +364,11 @@ class HirsakamGenerator:
             if output_path is None:
                 output_path = base_image_path
             
-            # 画像を保存（RGBAの場合はRGBに変換）
+            # 画像を保存（RGBAの場合はRGBに変換、元の背景を保持）
             if combined.mode == 'RGBA':
-                # 白背景でRGBに変換
-                rgb_image = Image.new('RGB', combined.size, (255, 255, 255))
+                # 元のベース画像の背景を保持してRGBに変換
+                original_base = Image.open(base_image_path)
+                rgb_image = original_base.convert('RGB')
                 rgb_image.paste(combined, mask=combined.split()[-1])
                 combined = rgb_image
             
@@ -310,7 +380,7 @@ class HirsakamGenerator:
             # エラーの場合は元の画像をそのまま返す
             return base_image_path
 
-    def add_overlay_image(self, base_image_path, overlay_image_path, x, y, width, height, opacity, output_path=None):
+    def add_overlay_image(self, base_image_path, overlay_image_path, x, y, width, height, opacity, rotation=0, output_path=None):
         """オーバーレイ画像を既存の画像に合成"""
         try:
             # ベース画像を読み込み
@@ -334,6 +404,14 @@ class HirsakamGenerator:
                 alpha = overlay_image.split()[-1]
                 alpha = alpha.point(lambda p: int(p * opacity))
                 overlay_image.putalpha(alpha)
+            
+            # 回転を適用（PillowとCSSの回転方向の違いを修正）
+            if rotation != 0:
+                overlay_image = overlay_image.rotate(-rotation, expand=True)
+                print(f"オーバーレイ画像回転完了: -{rotation}度（Pillow用調整）")
+                # 回転後のサイズを更新
+                width = overlay_image.width
+                height = overlay_image.height
             
             # 位置を調整（中央寄せから左上基準に変換）
             paste_x = int(x - width / 2)
@@ -362,10 +440,11 @@ class HirsakamGenerator:
             if output_path is None:
                 output_path = base_image_path
             
-            # 画像を保存（RGBAの場合はRGBに変換）
+            # 画像を保存（RGBAの場合はRGBに変換、元の背景を保持）
             if base_image.mode == 'RGBA':
-                # 白背景でRGBに変換
-                rgb_image = Image.new('RGB', base_image.size, (255, 255, 255))
+                # 元のベース画像の背景を保持してRGBに変換
+                original_base = Image.open(base_image_path)
+                rgb_image = original_base.convert('RGB')
                 rgb_image.paste(base_image, mask=base_image.split()[-1])
                 base_image = rgb_image
             
@@ -376,6 +455,147 @@ class HirsakamGenerator:
             print(f"オーバーレイ画像合成エラー: {e}")
             # エラーの場合は元の画像をそのまま返す
             return base_image_path
+    
+    def copy_base_image(self, output_path):
+        """ベース画像を出力パスにコピーする"""
+        try:
+            base_image = self.load_base_image()
+            # RGBモードで保存（透明性を含まない）
+            if base_image.mode != 'RGB':
+                base_image = base_image.convert('RGB')
+            base_image.save(output_path, "JPEG", quality=95)
+            print(f"ベース画像をコピーしました: {output_path}")
+            return output_path
+        except Exception as e:
+            print(f"ベース画像コピーエラー: {e}")
+            raise
+    
+    def add_text_to_image(self, input_path, text, position, color=(255, 255, 255), font_size=48, rotation=0, output_path=None):
+        """既存の画像にテキストを追加する"""
+        try:
+            # 既存の画像を読み込み
+            image = Image.open(input_path)
+            
+            # 出力パスが指定されていない場合は入力パスを使用
+            if output_path is None:
+                output_path = input_path
+                
+            # テキストを追加
+            result_image = self.add_text_to_image_obj(image, text, position, color, font_size, rotation)
+            
+            # RGBモードで保存
+            if result_image.mode != 'RGB':
+                result_image = result_image.convert('RGB')
+            result_image.save(output_path, "JPEG", quality=95)
+            print(f"テキストを追加しました: {text} at {position}")
+            return output_path
+        except Exception as e:
+            print(f"テキスト追加エラー: {e}")
+            return input_path
+    
+    def add_text_to_image_obj(self, image, text, position, color=(255, 255, 255), font_size=48, rotation=0):
+        """画像オブジェクトにテキストを追加する（回転対応）"""
+        draw = ImageDraw.Draw(image)
+        font = self.get_font(font_size)
+        
+        if rotation != 0:
+            # 回転する場合はテキストを一時的な透明画像に描画してから回転
+            bbox = draw.textbbox((0, 0), text, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+            
+            # テキスト用の透明画像を作成
+            text_img = Image.new('RGBA', (text_width + 50, text_height + 50), (0, 0, 0, 0))
+            text_draw = ImageDraw.Draw(text_img)
+            text_draw.text((25, 25), text, font=font, fill=color)
+            
+            # PillowとCSSの回転方向の違いを修正（負の値で時計回り）
+            rotated_text = text_img.rotate(-rotation, expand=True)
+            
+            # 位置調整して合成
+            paste_x = position[0] - rotated_text.width // 2
+            paste_y = position[1] - rotated_text.height // 2
+            
+            # RGBAモードに変換して合成
+            if image.mode != 'RGBA':
+                image = image.convert('RGBA')
+            image.paste(rotated_text, (paste_x, paste_y), rotated_text)
+        else:
+            # 回転なしの場合は直接描画
+            bbox = draw.textbbox((0, 0), text, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+            x = position[0] - text_width // 2
+            y = position[1] - text_height // 2
+            draw.text((x, y), text, font=font, fill=color)
+        
+        return image
+    
+    def add_emoji_to_image(self, input_path, emoji_char, position, size=164, rotation=0, output_path=None):
+        """既存の画像に絵文字を追加する（透明性を保持）"""
+        try:
+            # 既存の画像を読み込み
+            image = Image.open(input_path)
+            
+            # 出力パスが指定されていない場合は入力パスを使用
+            if output_path is None:
+                output_path = input_path
+                
+            # 絵文字を追加
+            result_image = self.add_emoji_to_image_obj(image, emoji_char, position, size, rotation)
+            
+            # RGBモードで保存（元の背景を保持）
+            if result_image.mode != 'RGB':
+                if result_image.mode == 'RGBA':
+                    # 元の画像をベースとしてRGB変換
+                    rgb_image = Image.new('RGB', result_image.size)
+                    # 元のベース画像の背景を使用
+                    base_rgb = image.convert('RGB') if image.mode != 'RGB' else image
+                    rgb_image.paste(base_rgb, (0, 0))
+                    rgb_image.paste(result_image, mask=result_image.split()[-1] if result_image.mode == 'RGBA' else None)
+                    result_image = rgb_image
+                else:
+                    result_image = result_image.convert('RGB')
+            
+            result_image.save(output_path, "JPEG", quality=95)
+            print(f"絵文字を追加しました: {emoji_char} at {position}")
+            return output_path
+        except Exception as e:
+            print(f"絵文字追加エラー: {e}")
+            return input_path
+    
+    def add_emoji_to_image_obj(self, image, emoji_char, position, size=164, rotation=0):
+        """画像オブジェクトに絵文字を追加する（回転対応、透明性保持）"""
+        try:
+            # 絵文字画像をダウンロード（透明性処理済み）
+            emoji_image = self.download_emoji_image(emoji_char, size)
+            if emoji_image is None:
+                print(f"絵文字画像の取得に失敗: {emoji_char}")
+                return image
+            
+            print(f"絵文字合成開始: {emoji_char}, 回転: {rotation}度")
+            
+            if rotation != 0:
+                # PillowとCSSの回転方向の違いを修正（負の値で時計回り）
+                emoji_image = emoji_image.rotate(-rotation, expand=True)
+                print(f"絵文字回転完了: -{rotation}度（Pillow用調整）")
+            
+            # 位置調整して合成
+            paste_x = position[0] - emoji_image.width // 2
+            paste_y = position[1] - emoji_image.height // 2
+            
+            # RGBAモードに変換して透明性を保持した合成
+            if image.mode != 'RGBA':
+                image = image.convert('RGBA')
+            
+            # アルファマスクを使用して透明性を保持して合成
+            image.paste(emoji_image, (paste_x, paste_y), emoji_image)
+            print(f"絵文字合成完了: 位置({paste_x}, {paste_y})")
+            
+            return image
+        except Exception as e:
+            print(f"絵文字合成エラー: {e}")
+            return image
 
 def main():
     parser = argparse.ArgumentParser(description="Hirsakam コラ画像ジェネレーター")
