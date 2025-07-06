@@ -55,6 +55,12 @@ function App() {
   // 画像圧縮の状態
   const [imageCompressionInfo, setImageCompressionInfo] = useState(null);
   
+  // レイヤー順序管理
+  const [layerOrder, setLayerOrder] = useState(['text', 'emoji', 'overlay']); // ベース画像が最下位、フリーハンド描画が最上位（固定）
+  const [showLayerPanel, setShowLayerPanel] = useState(false);
+  const [isDraggingLayer, setIsDraggingLayer] = useState(false);
+  const [draggedLayerIndex, setDraggedLayerIndex] = useState(-1);
+  
   const previewRef = useRef(null);
   const imageRef = useRef(null);
   const drawingCanvasRef = useRef(null);
@@ -66,6 +72,59 @@ function App() {
       ...prev,
       [name]: value
     }));
+  };
+
+  // レイヤー順序管理関数
+  const getLayerZIndex = (layerType) => {
+    const baseZIndex = 10;
+    const index = layerOrder.indexOf(layerType);
+    if (index < 0) return baseZIndex;
+    // 配列の後ろほど上位レイヤー（高いz-index）
+    return baseZIndex + index;
+  };
+
+  const handleLayerDragStart = (e, index) => {
+    setIsDraggingLayer(true);
+    setDraggedLayerIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', e.target.outerHTML);
+  };
+
+  const handleLayerDragOver = (e) => {
+    if (isDraggingLayer) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    }
+  };
+
+  const handleLayerDrop = (e, dropIndex) => {
+    e.preventDefault();
+    if (isDraggingLayer && draggedLayerIndex !== -1) {
+      const newLayerOrder = [...layerOrder];
+      const draggedLayer = newLayerOrder[draggedLayerIndex];
+      
+      // 要素を削除して新しい位置に挿入
+      newLayerOrder.splice(draggedLayerIndex, 1);
+      newLayerOrder.splice(dropIndex, 0, draggedLayer);
+      
+      setLayerOrder(newLayerOrder);
+      setIsDraggingLayer(false);
+      setDraggedLayerIndex(-1);
+    }
+  };
+
+  const handleLayerDragEnd = () => {
+    setIsDraggingLayer(false);
+    setDraggedLayerIndex(-1);
+  };
+
+  const getLayerName = (layerType) => {
+    switch (layerType) {
+      case 'text': return 'テキスト';
+      case 'emoji': return '絵文字';
+      case 'overlay': return 'オーバーレイ画像';
+      default: return layerType;
+    }
   };
 
   const handleEmojiSelect = (emoji) => {
@@ -679,6 +738,7 @@ function App() {
     console.log(`Overlay clicked: index ${overlayIndex}`);
     
     setSelectedOverlayIndex(overlayIndex);
+    setActiveElement(null); // テキスト・絵文字の選択を解除
     setIsOverlayDragging(true);
     setIsOverlayResizing(false); // リサイズ状態をクリア
     
@@ -973,6 +1033,9 @@ function App() {
         
         data.append('overlay_images', JSON.stringify(overlayData));
       }
+
+      // レイヤー順序を送信
+      data.append('layer_order', JSON.stringify(layerOrder));
 
       const response = await fetch('http://localhost:8000/generate', {
         method: 'POST',
@@ -1576,7 +1639,7 @@ function App() {
                             height: formData.emojiSize,
                             position: 'absolute',
                             pointerEvents: 'none',
-                            zIndex: 8,
+                            zIndex: getLayerZIndex('emoji'),
                             transform: `rotate(${emojiRotation}deg)`,
                             transformOrigin: 'center center'
                           }}
@@ -1607,7 +1670,7 @@ function App() {
                             top: textPosition.y - formData.fontSize / 2,
                             width: '200px',
                             textAlign: 'center',
-                            zIndex: 8,
+                            zIndex: getLayerZIndex('text'),
                             transform: `rotate(${textRotation}deg)`,
                             transformOrigin: 'center center'
                           }}
@@ -1631,12 +1694,14 @@ function App() {
                         userSelect: 'none',
                         pointerEvents: drawingMode ? 'none' : 'auto',
                         display: drawingMode ? 'none' : 'block',
-                        border: activeElement === 'text' ? '2px dashed rgba(102, 126, 234, 0.8)' : '2px dashed rgba(102, 126, 234, 0.3)'
+                        border: activeElement === 'text' ? '2px dashed rgba(102, 126, 234, 0.8)' : '2px dashed rgba(102, 126, 234, 0.3)',
+                        zIndex: getLayerZIndex('text')
                       }}
                       onMouseDown={(e) => {
                         console.log('TEXT CONTAINER CLICKED!');
                         e.stopPropagation();
                         setActiveElement('text');
+                        setSelectedOverlayIndex(-1); // オーバーレイの選択を解除
                         handleMouseDown(e, 'text');
                       }}
                       onWheel={handleWheelOnTextOverlay}
@@ -1715,12 +1780,14 @@ function App() {
                         userSelect: 'none',
                         pointerEvents: drawingMode ? 'none' : 'auto',
                         display: drawingMode ? 'none' : 'block',
-                        border: activeElement === 'emoji' ? '2px dashed rgba(102, 126, 234, 0.8)' : '2px dashed rgba(102, 126, 234, 0.3)'
+                        border: activeElement === 'emoji' ? '2px dashed rgba(102, 126, 234, 0.8)' : '2px dashed rgba(102, 126, 234, 0.3)',
+                        zIndex: getLayerZIndex('emoji')
                       }}
                       onMouseDown={(e) => {
                         console.log('EMOJI CONTAINER CLICKED!');
                         e.stopPropagation();
                         setActiveElement('emoji');
+                        setSelectedOverlayIndex(-1); // オーバーレイの選択を解除
                         handleMouseDown(e, 'emoji');
                       }}
                       onWheel={handleWheelOnTextOverlay}
@@ -1817,7 +1884,7 @@ function App() {
                         cursor: drawingMode ? 'default' : (selectedOverlayIndex === index && (isOverlayDragging || isOverlayResizing) ? 'grabbing' : 'grab'),
                         userSelect: 'none',
                         pointerEvents: drawingMode ? 'none' : 'auto',
-                        zIndex: selectedOverlayIndex === index ? 20 : 12,
+                        zIndex: getLayerZIndex('overlay'),
                         border: selectedOverlayIndex === index ? '2px dashed rgba(102, 126, 234, 0.8)' : '2px dashed rgba(102, 126, 234, 0.3)',
                         borderRadius: '4px'
                       }}
@@ -1888,19 +1955,14 @@ function App() {
                     </div>
                   ))}
                 </div>
-                {(formData.text || formData.emoji) && (
-                  <div className="preview-info">
-                    <div className="current-settings">
-                      {formData.text && (
-                        <span>テキスト位置: ({Math.round(textPosition.x)}, {Math.round(textPosition.y)}) サイズ: {formData.fontSize}px</span>
-                      )}
-                      {formData.emoji && (
-                        <span>絵文字位置: ({Math.round(emojiPosition.x)}, {Math.round(emojiPosition.y)}) サイズ: {formData.emojiSize}px</span>
-                      )}
-                    </div>
-                  </div>
-                )}
                 <div className="preview-controls">
+                  <button 
+                    onClick={() => setShowLayerPanel(true)}
+                    className="layer-button"
+                    title="レイヤー順序を変更"
+                  >
+                    📐 レイヤー
+                  </button>
                   <button 
                     onClick={() => {
                       setPreviewMode(false);
@@ -2057,6 +2119,73 @@ function App() {
         </div>
       </div>
       <EmojiPicker />
+      
+      {/* レイヤー順序管理パネル */}
+      {showLayerPanel && (
+        <div className="layer-panel-overlay">
+          <div className="layer-panel">
+            <div className="layer-panel-header">
+              <h3>レイヤー順序</h3>
+              <button
+                onClick={() => setShowLayerPanel(false)}
+                className="layer-panel-close"
+              >
+                ×
+              </button>
+            </div>
+            <div className="layer-panel-content">
+              <div className="layer-info">
+                <small>ドラッグして順序を変更（下が最下位、上が最上位）</small>
+              </div>
+              <div className="layer-list">
+                {/* フリーハンド描画（固定・最上位） */}
+                <div className="layer-item layer-fixed">
+                  <span className="layer-icon">🖍️</span>
+                  <span className="layer-name">フリーハンド描画</span>
+                  <span className="layer-status">（固定・最上位）</span>
+                </div>
+                
+                {/* 動的レイヤー（ドラッグ可能） */}
+                {layerOrder.slice().reverse().map((layerType, reverseIndex) => {
+                  const actualIndex = layerOrder.length - 1 - reverseIndex;
+                  const hasContent = 
+                    (layerType === 'text' && formData.text) ||
+                    (layerType === 'emoji' && formData.emoji) ||
+                    (layerType === 'overlay' && overlayImages.length > 0);
+                  
+                  // すべてのレイヤータイプはドラッグ可能（空でも順序変更のため）
+                  const isDraggable = true;
+                  
+                  return (
+                    <div
+                      key={layerType}
+                      className={`layer-item ${!hasContent ? 'layer-empty' : ''} ${isDraggingLayer && draggedLayerIndex === actualIndex ? 'layer-dragging' : ''}`}
+                      draggable={isDraggable}
+                      onDragStart={(e) => handleLayerDragStart(e, actualIndex)}
+                      onDragOver={handleLayerDragOver}
+                      onDrop={(e) => handleLayerDrop(e, actualIndex)}
+                      onDragEnd={handleLayerDragEnd}
+                    >
+                      <span className="layer-icon">
+                        {layerType === 'text' ? '📝' : layerType === 'emoji' ? '😀' : '🖼️'}
+                      </span>
+                      <span className="layer-name">{getLayerName(layerType)}</span>
+                      {!hasContent && <span className="layer-status">（空）</span>}
+                    </div>
+                  );
+                })}
+                
+                {/* ベース画像（固定・最下位） */}
+                <div className="layer-item layer-fixed">
+                  <span className="layer-icon">🖼️</span>
+                  <span className="layer-name">ベース画像</span>
+                  <span className="layer-status">（固定・最下位）</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
