@@ -917,8 +917,8 @@ function App() {
       if (formData.text) {
         data.append('text', formData.text);
         // テキストの座標と回転を送信
-        data.append('x', Math.round(textPosition.x * imageScale));
-        data.append('y', Math.round(textPosition.y * imageScale));
+        data.append('text_x', Math.round(textPosition.x * imageScale));
+        data.append('text_y', Math.round(textPosition.y * imageScale));
         data.append('font_size', Math.round(formData.fontSize * imageScale));
         data.append('text_color', formData.textColor);
         data.append('text_rotation', textRotation);
@@ -926,8 +926,8 @@ function App() {
       if (formData.emoji) {
         data.append('emoji', formData.emoji);
         // 絵文字の座標と回転を送信
-        data.append('x', Math.round(emojiPosition.x * imageScale));
-        data.append('y', Math.round(emojiPosition.y * imageScale));
+        data.append('emoji_x', Math.round(emojiPosition.x * imageScale));
+        data.append('emoji_y', Math.round(emojiPosition.y * imageScale));
         data.append('emoji_size', Math.round(formData.emojiSize * imageScale));
         data.append('emoji_rotation', emojiRotation);
       }
@@ -1559,7 +1559,7 @@ function App() {
                     onMouseLeave={handleDrawingEnd}
                     style={{
                       display: drawingMode ? 'block' : 'none',
-                      zIndex: drawingMode ? 15 : 5
+                      zIndex: drawingMode ? 1000 : 5
                     }}
                   />
                   
@@ -1576,7 +1576,9 @@ function App() {
                             height: formData.emojiSize,
                             position: 'absolute',
                             pointerEvents: 'none',
-                            zIndex: 8
+                            zIndex: 8,
+                            transform: `rotate(${emojiRotation}deg)`,
+                            transformOrigin: 'center center'
                           }}
                         >
                           <img 
@@ -1605,7 +1607,9 @@ function App() {
                             top: textPosition.y - formData.fontSize / 2,
                             width: '200px',
                             textAlign: 'center',
-                            zIndex: 8
+                            zIndex: 8,
+                            transform: `rotate(${textRotation}deg)`,
+                            transformOrigin: 'center center'
                           }}
                         >
                           {formData.text}
