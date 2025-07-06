@@ -42,6 +42,16 @@ function App() {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [canvasReady, setCanvasReady] = useState(false);
   
+  // 最新の描画履歴への参照
+  const drawingHistoryRef = useRef([]);
+  const historyIndexRef = useRef(-1);
+  
+  // refを最新の状態に同期
+  React.useEffect(() => {
+    drawingHistoryRef.current = drawingHistory;
+    historyIndexRef.current = historyIndex;
+  }, [drawingHistory, historyIndex]);
+  
   // Overlay image states
   const [overlayImages, setOverlayImages] = useState([]);
   const [selectedOverlayIndex, setSelectedOverlayIndex] = useState(-1);
@@ -346,28 +356,61 @@ function App() {
       const scale = naturalWidth / displayWidth;
       setImageScale(scale);
       
-      // 描画キャンバスを初期化（複数回の試行で確実に実行）
-      setTimeout(() => {
-        if (drawingMode && previewMode && drawingCanvasRef.current) {
-          initializeDrawingCanvas();
-        }
-      }, 200);
-      
-      setTimeout(() => {
-        if (drawingMode && previewMode && drawingCanvasRef.current) {
-          initializeDrawingCanvas();
-        }
-      }, 600);
-      
-      setTimeout(() => {
-        if (drawingMode && previewMode && drawingCanvasRef.current) {
-          initializeDrawingCanvas();
-        }
-      }, 1000);
+      // プレビューモード中でキャンバスが存在する場合、既存の描画を保持してサイズ調整
+      if (previewMode && drawingCanvasRef.current) {
+        setTimeout(() => {
+          if (drawingCanvasRef.current && imageRef.current) {
+            const canvas = drawingCanvasRef.current;
+            const context = canvas.getContext('2d');
+            
+            const newWidth = imageRef.current.clientWidth;
+            const newHeight = imageRef.current.clientHeight;
+            
+            // 既存の描画内容を保存
+            let savedDrawing = null;
+            if (canvas.width > 0 && canvas.height > 0) {
+              try {
+                savedDrawing = canvas.toDataURL();
+              } catch (e) {
+                // エラーは無視
+              }
+            }
+            
+            // キャンバスサイズを設定
+            canvas.width = newWidth;
+            canvas.height = newHeight;
+            
+            // コンテキスト設定を適用
+            context.lineCap = 'round';
+            context.lineJoin = 'round';
+            context.globalCompositeOperation = 'source-over';
+            context.strokeStyle = drawingColor;
+            context.lineWidth = drawingThickness;
+            
+            drawingContextRef.current = context;
+            
+            // 既存の描画を復元
+            if (savedDrawing) {
+              const img = new Image();
+              img.onload = () => {
+                try {
+                  context.drawImage(img, 0, 0, newWidth, newHeight);
+                } catch (e) {
+                  // エラーは無視
+                }
+                setCanvasReady(true);
+              };
+              img.src = savedDrawing;
+            } else {
+              setCanvasReady(true);
+            }
+          }
+        }, 200);
+      }
     }
   };
 
-  const initializeDrawingCanvas = () => {
+  const initializeDrawingCanvas = (preserveHistory = false) => {
     if (drawingCanvasRef.current && imageRef.current) {
       const canvas = drawingCanvasRef.current;
       const context = canvas.getContext('2d');
@@ -377,8 +420,18 @@ function App() {
       
       // サイズが0の場合は再試行
       if (clientWidth === 0 || clientHeight === 0) {
-        setTimeout(() => initializeDrawingCanvas(), 500);
+        setTimeout(() => initializeDrawingCanvas(preserveHistory), 500);
         return;
+      }
+      
+      // 既存の描画を保存（preserveHistoryが有効で既に描画がある場合）
+      let savedDrawing = null;
+      if (preserveHistory && canvas.width > 0 && canvas.height > 0) {
+        try {
+          savedDrawing = canvas.toDataURL();
+        } catch (e) {
+          // エラーは無視
+        }
       }
       
       canvas.width = clientWidth;
@@ -388,30 +441,41 @@ function App() {
       context.lineCap = 'round';
       context.lineJoin = 'round';
       context.globalCompositeOperation = 'source-over';
-      
-      // 描画設定を初期化（デフォルトの黒い線を防ぐ）
       context.strokeStyle = drawingColor;
       context.lineWidth = drawingThickness;
       
       drawingContextRef.current = context;
       
-      // 履歴をクリア（初期状態は保存しない）
-      setDrawingHistory([]);
-      setHistoryIndex(-1);
+      // 履歴をクリア（履歴保持フラグがfalseの場合のみ）
+      if (!preserveHistory) {
+        setDrawingHistory([]);
+        setHistoryIndex(-1);
+      }
       
-      // 初期化完了をマーク（少し遅延を入れて確実に完了）
-      setTimeout(() => {
-        setCanvasReady(true);
-      }, 100);
+      // 保存された描画を復元
+      if (savedDrawing) {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            context.drawImage(img, 0, 0, clientWidth, clientHeight);
+          } catch (e) {
+            // エラーは無視
+          }
+          setCanvasReady(true);
+        };
+        img.src = savedDrawing;
+      } else {
+        setTimeout(() => {
+          setCanvasReady(true);
+        }, 100);
+      }
     } else {
-      console.log('❌ Canvas init failed - Canvas:', !!drawingCanvasRef.current, 'Image:', !!imageRef.current);
       setCanvasReady(false);
     }
   };
 
   const saveToHistory = () => {
     if (!drawingCanvasRef.current) {
-      console.log('saveToHistory: No canvas available');
       return;
     }
     
@@ -419,7 +483,6 @@ function App() {
     
     // キャンバスが有効でない場合は保存をスキップ
     if (canvas.width === 0 || canvas.height === 0) {
-      console.log('saveToHistory: Canvas has zero size, skipping save');
       return;
     }
     
@@ -545,15 +608,7 @@ function App() {
   };
 
   const handleDrawingStart = (e) => {
-    // キャンバスの準備状態をチェック
-    if (!canvasReady) {
-      console.log('Canvas not ready yet, delaying drawing start');
-      // キャンバスが準備できるまで少し待つ
-      setTimeout(() => {
-        if (canvasReady) {
-          handleDrawingStart(e);
-        }
-      }, 200);
+    if (!drawingCanvasRef.current || !drawingContextRef.current) {
       return;
     }
     
@@ -561,7 +616,6 @@ function App() {
       const canvas = drawingCanvasRef.current;
       
       if (canvas.width === 0 || canvas.height === 0) {
-        console.error('Canvas size is zero - drawing prevented');
         return;
       }
     }
@@ -581,24 +635,10 @@ function App() {
     
     const context = drawingContextRef.current;
     if (!context) {
-      console.error('No drawing context available');
       return;
     }
     
-    // 初回描画の準備
-    if (drawingHistory.length === 0) {
-      // 初回描画時は現在のキャンバス状態を確認
-      const currentImageData = canvas.toDataURL();
-      const emptyCanvas = document.createElement('canvas');
-      emptyCanvas.width = canvas.width;
-      emptyCanvas.height = canvas.height;
-      const emptyImageData = emptyCanvas.toDataURL();
-      
-      // 現在のキャンバスが空でない場合はクリア
-      if (currentImageData !== emptyImageData) {
-        context.clearRect(0, 0, canvas.width, canvas.height);
-      }
-    }
+    // 初回描画の準備（キャンバスをクリアしない）
     
     // 前回のパスをクリア
     context.closePath();
@@ -608,6 +648,8 @@ function App() {
     context.lineWidth = drawingThickness;
     context.lineCap = 'round';
     context.lineJoin = 'round';
+    context.globalCompositeOperation = 'source-over';
+    
     
     // 新しいパスを開始
     context.beginPath();
@@ -685,8 +727,6 @@ function App() {
     const x = e.clientX - canvasRect.left;
     const y = e.clientY - canvasRect.top;
     
-    console.log(`=== ${elementType?.toUpperCase() || 'ELEMENT'} DRAG START ===`);
-    console.log(`Mouse down at: (${x}, ${y})`);
     
     setIsDragging(true);
     setIsResizing(false);
@@ -711,11 +751,6 @@ function App() {
     const currentBounds = calculateTextBounds();
     setTextBounds(currentBounds);
     
-    console.log(`=== TEXT/EMOJI RESIZE START ===`);
-    console.log(`Resize handle clicked: ${direction}`);
-    console.log(`Initial size: ${formData.emoji ? formData.emojiSize : formData.fontSize}`);
-    console.log(`Current textBounds:`, currentBounds);
-    console.log(`FormData:`, formData);
     
     setIsResizing(true);
     setIsDragging(false); // ドラッグ状態をクリア
@@ -734,8 +769,6 @@ function App() {
     e.preventDefault();
     e.stopPropagation();
     
-    console.log(`=== OVERLAY DRAG START ===`);
-    console.log(`Overlay clicked: index ${overlayIndex}`);
     
     setSelectedOverlayIndex(overlayIndex);
     setActiveElement(null); // テキスト・絵文字の選択を解除
@@ -747,7 +780,6 @@ function App() {
     const y = e.clientY - canvasRect.top;
     const overlay = overlayImages[overlayIndex];
     
-    console.log(`Mouse down at: (${x}, ${y}), overlay at: (${overlay.x}, ${overlay.y})`);
     setDragOffset({ x: x - overlay.x, y: y - overlay.y });
   };
 
@@ -757,9 +789,6 @@ function App() {
     e.preventDefault();
     e.stopPropagation();
     
-    console.log(`=== OVERLAY RESIZE START ===`);
-    console.log(`Overlay resize handle clicked: ${direction} for overlay ${overlayIndex}`);
-    
     setSelectedOverlayIndex(overlayIndex);
     setIsOverlayResizing(true);
     setIsOverlayDragging(false); // ドラッグ状態をクリア
@@ -768,7 +797,6 @@ function App() {
     
     const overlay = overlayImages[overlayIndex];
     setInitialSize(overlay.width);
-    console.log(`Initial overlay size: ${overlay.width}x${overlay.height}`);
   };
 
   const handleMouseMove = (e) => {
@@ -780,13 +808,11 @@ function App() {
       const y = e.clientY - rect.top - dragOffset.y;
       
       // 境界制限を削除して自由に移動可能に
-      console.log(`Overlay dragging to: (${x}, ${y})`);
       updateOverlayImage(selectedOverlayIndex, { x: x, y: y });
     } else if (isOverlayResizing && selectedOverlayIndex >= 0) {
       const deltaX = e.clientX - initialMousePos.x;
       const deltaY = e.clientY - initialMousePos.y;
       
-      console.log(`Mouse delta: (${deltaX}, ${deltaY}), direction: ${resizeDirection}`);
       
       let sizeDelta = 0;
       
@@ -816,8 +842,6 @@ function App() {
       const newWidth = Math.max(20, Math.min(500, initialSize + sizeDelta));
       const newHeight = newWidth * aspectRatio;
       
-      console.log(`Overlay resizing: ${initialSize} -> ${newWidth} (delta: ${sizeDelta}, aspectRatio: ${aspectRatio})`);
-      console.log(`Original size: ${currentOverlay.originalWidth}x${currentOverlay.originalHeight}`);
       updateOverlayImage(selectedOverlayIndex, { 
         width: newWidth, 
         height: newHeight 
@@ -828,7 +852,6 @@ function App() {
       const y = e.clientY - rect.top - dragOffset.y;
       
       // 境界制限を削除して自由に移動可能に
-      console.log(`Dragging ${activeElement} to: (${x}, ${y})`);
       
       // アクティブな要素に応じて位置を更新
       if (activeElement === 'text') {
@@ -1053,7 +1076,6 @@ function App() {
       // プレビューモード終了時にtextBoundsをリセット
       const bounds = calculateTextBounds();
       setTextBounds(bounds);
-      console.log('Preview ended, textBounds reset:', bounds);
       loadGallery();
     } catch (error) {
       console.error('Error:', error);
@@ -1150,23 +1172,61 @@ function App() {
     loadGallery();
   }, []);
 
-  // ベース画像変更時にキャンバスを再初期化（keyによる強制再マウント後）
+  // ベース画像変更時にキャンバスサイズを調整（描画を保持）
   React.useEffect(() => {
-    if (previewMode && drawingMode && imageRef.current) {
-      console.log('Base image changed, forcing canvas remount and reinitializing');
-      // keyプロパティによる強制再マウント後、十分な時間を待つ
+    if (previewMode && imageRef.current && drawingCanvasRef.current) {
+      // 現在の描画を保存
+      let savedDrawing = null;
+      try {
+        if (drawingCanvasRef.current.width > 0) {
+          savedDrawing = drawingCanvasRef.current.toDataURL();
+        }
+      } catch (e) {
+        // エラーは無視
+      }
+      
+      // 一時的にキャンバス準備状態をリセット
+      setCanvasReady(false);
+      
+      // 画像がロードされるまで待ってからキャンバスを調整
       setTimeout(() => {
-        console.log('Post-remount canvas init attempt 1');
         if (drawingCanvasRef.current && imageRef.current) {
-          initializeDrawingCanvas();
+          const canvas = drawingCanvasRef.current;
+          const context = canvas.getContext('2d');
+          
+          const newWidth = imageRef.current.clientWidth;
+          const newHeight = imageRef.current.clientHeight;
+          
+          // キャンバスサイズを設定
+          canvas.width = newWidth;
+          canvas.height = newHeight;
+          
+          // コンテキストの設定を適用
+          context.lineCap = 'round';
+          context.lineJoin = 'round';
+          context.globalCompositeOperation = 'source-over';
+          context.strokeStyle = drawingColor;
+          context.lineWidth = drawingThickness;
+          
+          drawingContextRef.current = context;
+          
+          // 保存された描画を復元
+          if (savedDrawing) {
+            const img = new Image();
+            img.onload = () => {
+              try {
+                context.drawImage(img, 0, 0, newWidth, newHeight);
+              } catch (e) {
+                // エラーは無視
+              }
+              setCanvasReady(true);
+            };
+            img.src = savedDrawing;
+          } else {
+            setCanvasReady(true);
+          }
         }
       }, 500);
-      setTimeout(() => {
-        console.log('Post-remount canvas init attempt 2');
-        if (drawingCanvasRef.current && imageRef.current) {
-          initializeDrawingCanvas();
-        }
-      }, 1200);
     }
   }, [baseImage]);
 
@@ -1176,22 +1236,21 @@ function App() {
       // 描画状態をリセット
       setIsDrawing(false);
       setCanvasReady(false); // キャンバス準備状態をリセット
-      // keyによる強制再マウント後、より長い遅延で初期化
-      setTimeout(() => {
-        if (drawingCanvasRef.current && imageRef.current) {
-          initializeDrawingCanvas();
-        }
-      }, 300);
-      setTimeout(() => {
-        if (drawingCanvasRef.current && imageRef.current) {
-          initializeDrawingCanvas();
-        }
-      }, 800);
-      setTimeout(() => {
-        if (drawingCanvasRef.current && imageRef.current) {
-          initializeDrawingCanvas();
-        }
-      }, 1500);
+      
+      // 単一の初期化処理
+      let hasInitialized = false;
+      const initializeDrawingMode = () => {
+        if (hasInitialized) return;
+        
+        setTimeout(() => {
+          if (drawingCanvasRef.current && imageRef.current && !hasInitialized) {
+            hasInitialized = true;
+            initializeDrawingCanvas(true); // 描画モード切り替え時は履歴を保持
+          }
+        }, 500);
+      };
+      
+      initializeDrawingMode();
     } else if (!drawingMode) {
       // 描画モードを無効にした時も状態をリセット
       setIsDrawing(false);
@@ -1613,7 +1672,7 @@ function App() {
                   
                   {/* Drawing Canvas */}
                   <canvas
-                    key={`canvas-${baseImage ? baseImage.name : 'default'}-${drawingMode}`}
+                    key="drawing-canvas"
                     ref={drawingCanvasRef}
                     className={`drawing-canvas ${drawingMode ? 'drawing-active' : ''}`}
                     onMouseDown={handleDrawingStart}
@@ -1621,8 +1680,9 @@ function App() {
                     onMouseUp={handleDrawingEnd}
                     onMouseLeave={handleDrawingEnd}
                     style={{
-                      display: drawingMode ? 'block' : 'none',
-                      zIndex: drawingMode ? 1000 : 5
+                      display: 'block',
+                      pointerEvents: drawingMode ? 'auto' : 'none',
+                      zIndex: 1000
                     }}
                   />
                   
@@ -1698,7 +1758,6 @@ function App() {
                         zIndex: getLayerZIndex('text')
                       }}
                       onMouseDown={(e) => {
-                        console.log('TEXT CONTAINER CLICKED!');
                         e.stopPropagation();
                         setActiveElement('text');
                         setSelectedOverlayIndex(-1); // オーバーレイの選択を解除
@@ -1784,7 +1843,6 @@ function App() {
                         zIndex: getLayerZIndex('emoji')
                       }}
                       onMouseDown={(e) => {
-                        console.log('EMOJI CONTAINER CLICKED!');
                         e.stopPropagation();
                         setActiveElement('emoji');
                         setSelectedOverlayIndex(-1); // オーバーレイの選択を解除
@@ -1966,10 +2024,9 @@ function App() {
                   <button 
                     onClick={() => {
                       setPreviewMode(false);
-                      // プレビューモード終了時にtextBoundsをリセット
+                      // プレビューモード終了時にtextBounds をリセット
                       const bounds = calculateTextBounds();
                       setTextBounds(bounds);
-                      console.log('Preview ended via back button, textBounds reset:', bounds);
                     }}
                     className="back-button"
                   >
