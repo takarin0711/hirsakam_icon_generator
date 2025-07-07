@@ -10,9 +10,42 @@ import time
 import signal
 from pathlib import Path
 
+def setup_environment():
+    """環境変数を設定"""
+    # SERVER_URLが設定されている場合、子プロセス用の環境変数を準備
+    server_url = os.getenv("SERVER_URL")
+    env = os.environ.copy()
+    
+    if server_url:
+        print(f"🌐 SERVER_URL が設定されています: {server_url}")
+        # バックエンド用（そのまま渡す）
+        env["SERVER_URL"] = server_url
+        # フロントエンド用（REACT_APP_プレフィックスを追加）
+        env["REACT_APP_SERVER_URL"] = server_url
+    
+    return env
+
+def get_server_urls():
+    """現在の設定に基づいてサーバーURLを取得"""
+    server_url = os.getenv("SERVER_URL")
+    
+    if server_url:
+        # 環境変数が設定されている場合
+        frontend_url = f"{server_url}:3000"
+        backend_url = f"{server_url}:8000"
+        docs_url = f"{server_url}:8000/docs"
+    else:
+        # デフォルト（ローカル環境）
+        frontend_url = "http://localhost:3000"
+        backend_url = "http://localhost:8000"
+        docs_url = "http://localhost:8000/docs"
+    
+    return frontend_url, backend_url, docs_url
+
 def run_backend():
     """バックエンドサーバーを起動"""
     backend_dir = Path(__file__).parent / "backend"
+    env = setup_environment()
     
     # 必要なディレクトリを作成
     os.makedirs("output", exist_ok=True)
@@ -35,11 +68,16 @@ def run_backend():
         # FastAPIサーバーを起動
         process = subprocess.Popen([
             str(python_path), "app.py"
-        ], cwd=backend_dir)
+        ], cwd=backend_dir, env=env)
         
-        print("✅ バックエンドサーバーが起動しました (http://localhost:8000)")
+        frontend_url, backend_url, docs_url = get_server_urls()
+        print(f"✅ バックエンドサーバーが起動しました ({backend_url})")
         print("💡 フロントエンドは別のターミナルで以下を実行してください:")
-        print("   python3 run.py frontend")
+        server_url = os.getenv("SERVER_URL")
+        if server_url:
+            print(f"   SERVER_URL=\"{server_url}\" python3 run.py frontend")
+        else:
+            print("   python3 run.py frontend")
         print("\n⏹️  終了するには Ctrl+C を押してください")
         
         # プロセスの終了を待機
@@ -57,6 +95,7 @@ def run_backend():
 def run_frontend():
     """フロントエンドサーバーを起動"""
     frontend_dir = Path(__file__).parent / "frontend"
+    env = setup_environment()
     
     print("🎨 フロントエンドサーバーを起動中...")
     print(f"📂 Working directory: {frontend_dir}")
@@ -65,9 +104,10 @@ def run_frontend():
         # npm startを実行
         process = subprocess.Popen([
             "npm", "start"
-        ], cwd=frontend_dir)
+        ], cwd=frontend_dir, env=env)
         
-        print("✅ フロントエンドサーバーが起動しました (http://localhost:3000)")
+        frontend_url, backend_url, docs_url = get_server_urls()
+        print(f"✅ フロントエンドサーバーが起動しました ({frontend_url})")
         print("\n⏹️  終了するには Ctrl+C を押してください")
         
         # プロセスの終了を待機
@@ -86,6 +126,8 @@ def run_both():
     """バックエンドとフロントエンドを同時起動"""
     print("🐱 Hirsakam Icon Generator を起動しています...")
     print("=" * 50)
+    
+    env = setup_environment()
     
     # 必要なディレクトリを作成
     os.makedirs("output", exist_ok=True)
@@ -109,7 +151,7 @@ def run_both():
         print("🚀 バックエンドサーバーを起動中...")
         backend_process = subprocess.Popen([
             str(python_path), "app.py"
-        ], cwd=backend_dir)
+        ], cwd=backend_dir, env=env)
         
         # 少し待機
         time.sleep(3)
@@ -118,12 +160,13 @@ def run_both():
         print("🎨 フロントエンドサーバーを起動中...")
         frontend_process = subprocess.Popen([
             "npm", "start"
-        ], cwd=frontend_dir)
+        ], cwd=frontend_dir, env=env)
         
+        frontend_url, backend_url, docs_url = get_server_urls()
         print("\n✅ 起動完了!")
-        print("🔗 フロントエンド: http://localhost:3000")
-        print("🔗 バックエンドAPI: http://localhost:8000")
-        print("📚 API ドキュメント: http://localhost:8000/docs")
+        print(f"🔗 フロントエンド: {frontend_url}")
+        print(f"🔗 バックエンドAPI: {backend_url}")
+        print(f"📚 API ドキュメント: {docs_url}")
         print("\nCtrl+C で終了します...")
         
         # プロセスの終了を待機
@@ -169,6 +212,10 @@ def main():
         print("  python3 run.py frontend  # フロントエンドサーバーのみ起動")
         print("  python3 run.py both      # 両方同時に起動")
         print("  python3 run.py help      # このヘルプを表示")
+        print("\n環境変数:")
+        print("  SERVER_URL               # サーバーURL（例: http://your-server.com）")
+        print("\nサーバー環境での起動例:")
+        print("  SERVER_URL=\"http://your-server\" python3 run.py")
         print("\n推奨（別々のターミナルで起動する場合）:")
         print("  1. 最初のターミナル: python3 run.py backend")
         print("  2. 2つ目のターミナル: python3 run.py frontend")
