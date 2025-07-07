@@ -189,6 +189,7 @@ async def generate_icon(
                             overlay['height'], 
                             overlay['opacity'],
                             overlay.get('rotation', 0),
+                            overlay.get('removeBackground', False),
                             current_result_path
                         )
                         
