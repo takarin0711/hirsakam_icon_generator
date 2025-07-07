@@ -286,11 +286,22 @@ async def get_gallery():
 
 if __name__ == "__main__":
     # ファイルアップロードサイズ制限を5MBに設定
+    server_url = os.getenv("SERVER_URL", "http://localhost")
+    
+    # 起動メッセージをカスタマイズ
+    print(f"🚀 FastAPI サーバーを起動しています...")
+    if server_url != "http://localhost":
+        print(f"🌐 サーバーURL: {server_url}:8000")
+    else:
+        print(f"🏠 ローカル開発環境: {server_url}:8000")
+    
     uvicorn.run(
         app, 
         host="0.0.0.0", 
         port=8000,
         # リクエストサイズ制限を5MB（5 * 1024 * 1024 bytes）に設定
         limit_max_requests=1000,
-        timeout_keep_alive=30
+        timeout_keep_alive=30,
+        # uvicornのログレベルを設定（WARNINGにしてINFOログを減らす）
+        log_level="warning"
     )

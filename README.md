@@ -72,6 +72,17 @@ REACT_APP_SERVER_URL=http://your-server.com
 ```
 
 ### 起動コマンド例
+
+**統合スクリプト使用（推奨）**:
+```bash
+# ローカル環境
+python3 run.py
+
+# サーバー環境
+SERVER_URL="http://your-server" python3 run.py
+```
+
+**個別起動**:
 ```bash
 # サーバー環境での起動（同じサーバーURLを使用）
 SERVER_URL="http://your-server"
