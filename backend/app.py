@@ -24,9 +24,21 @@ app = FastAPI(
 )
 
 # CORS設定（フロントエンドとの通信用）
+# 環境変数からサーバーURLを取得、デフォルトはlocalhost
+server_url = os.getenv("SERVER_URL", "http://localhost")
+if server_url == "*":
+    # 本番環境で全てのオリジンを許可する場合（注意: セキュリティリスクあり）
+    frontend_urls = ["*"]
+else:
+    # ポート3000を自動追加してフロントエンドURLを構築
+    frontend_urls = [f"{server_url}:3000"]
+    # 開発環境用に追加のローカルホストパターンも許可
+    if "http://localhost:3000" not in frontend_urls:
+        frontend_urls.append("http://localhost:3000")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # React dev server
+    allow_origins=frontend_urls,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

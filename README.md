@@ -54,6 +54,35 @@ python3 run.py help      # ヘルプ表示
 - **バックエンドAPI**: http://localhost:8000
 - **API ドキュメント**: http://localhost:8000/docs
 
+## ⚙️ サーバー環境での設定
+
+### 環境変数設定
+
+**.env ファイル設定例**:
+
+**バックエンド** (backend/.env):
+```bash
+SERVER_URL=http://your-server.com
+```
+
+**フロントエンド** (frontend/.env):
+```bash
+# Note: React requires REACT_APP_ prefix
+REACT_APP_SERVER_URL=http://your-server.com
+```
+
+### 起動コマンド例
+```bash
+# サーバー環境での起動（同じサーバーURLを使用）
+SERVER_URL="http://your-server"
+
+# バックエンド起動
+cd backend && SERVER_URL="$SERVER_URL" python3 app.py
+
+# フロントエンド起動（Reactには REACT_APP_ プレフィックスが必要）
+cd frontend && REACT_APP_SERVER_URL="$SERVER_URL" npm start
+```
+
 ## ✨ 機能
 
 ### Web UI版（推奨）

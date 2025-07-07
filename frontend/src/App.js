@@ -931,11 +931,29 @@ function App() {
   };
 
 
+  // APIベースURLを環境に応じて動的に取得
+  const getApiBaseUrl = () => {
+    // 環境変数があればそれを使用（ポート8000を自動追加）
+    if (process.env.REACT_APP_SERVER_URL) {
+      return `${process.env.REACT_APP_SERVER_URL}:8000`;
+    }
+    
+    // 開発環境またはlocalhostの場合
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'http://localhost:8000';
+    }
+    
+    // サーバー環境: 現在のホストのポート8000を使用
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    return `${protocol}//${hostname}:8000`;
+  };
+
   const getBaseImageUrl = () => {
     if (baseImage) {
       return URL.createObjectURL(baseImage);
     }
-    return 'http://localhost:8000/default-image';
+    return `${getApiBaseUrl()}/default-image`;
   };
 
   const generateIcon = async () => {
@@ -1017,7 +1035,7 @@ function App() {
       // レイヤー順序を送信
       data.append('layer_order', JSON.stringify(layerOrder));
 
-      const response = await fetch('http://localhost:8000/generate', {
+      const response = await fetch(`${getApiBaseUrl()}/generate`, {
         method: 'POST',
         body: data
       });
@@ -1044,7 +1062,7 @@ function App() {
 
   const loadGallery = async () => {
     try {
-      const response = await fetch('http://localhost:8000/gallery');
+      const response = await fetch(`${getApiBaseUrl()}/gallery`);
       if (response.ok) {
         const data = await response.json();
         setGallery(data.images || []);
@@ -1056,7 +1074,7 @@ function App() {
 
   const downloadImage = (url, filename) => {
     const link = document.createElement('a');
-    link.href = `http://localhost:8000${url}`;
+    link.href = `${getApiBaseUrl()}${url}`;
     link.download = filename;
     link.click();
   };
@@ -2100,7 +2118,7 @@ function App() {
             ) : generatedImage ? (
               <div className="generated-image">
                 <img 
-                  src={`http://localhost:8000${generatedImage}`} 
+                  src={`${getApiBaseUrl()}${generatedImage}`} 
                   alt="生成されたアイコン"
                   className="result-image"
                 />
@@ -2135,7 +2153,7 @@ function App() {
             {gallery.map((image, index) => (
               <div key={index} className="gallery-item">
                 <img 
-                  src={`http://localhost:8000${image.url}`} 
+                  src={`${getApiBaseUrl()}${image.url}`} 
                   alt={`Gallery item ${index + 1}`}
                   className="gallery-image"
                 />
