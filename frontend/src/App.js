@@ -271,6 +271,7 @@ function App() {
             id: Date.now(),
             file: processedFile,
             url: URL.createObjectURL(processedFile),
+            displayUrl: URL.createObjectURL(processedFile), // プレビュー用URL（初期値は元画像）
             x: 200,
             y: 150,
             width: width,
@@ -278,7 +279,8 @@ function App() {
             originalWidth: img.width,
             originalHeight: img.height,
             opacity: 1,
-            rotation: 0
+            rotation: 0,
+            removeBackground: false
           };
           setOverlayImages(prev => [...prev, newOverlay]);
           setSelectedOverlayIndex(overlayImages.length);
@@ -305,8 +307,106 @@ function App() {
 
   const updateOverlayImage = (index, updates) => {
     setOverlayImages(prev => 
-      prev.map((img, i) => i === index ? { ...img, ...updates } : img)
+      prev.map((img, i) => {
+        if (i === index) {
+          const updated = { ...img, ...updates };
+          // 背景透過フラグが変更された場合、透過処理されたURLを生成
+          if (updates.hasOwnProperty('removeBackground')) {
+            if (updates.removeBackground) {
+              // 背景透過処理を適用（簡易版）
+              processBackgroundRemoval(updated);
+            } else {
+              // 元の画像に戻す
+              updated.displayUrl = updated.url;
+            }
+          }
+          return updated;
+        }
+        return img;
+      })
     );
+  };
+
+  // 簡易背景透過処理（プレビュー用）
+  const processBackgroundRemoval = async (overlay) => {
+    try {
+      // Canvas を使って簡易的な背景透過処理
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = img.width;
+        canvas.height = img.height;
+        
+        ctx.drawImage(img, 0, 0);
+        
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+        
+        // 簡易的な背景透過処理（エッジの色を基準に）
+        const corners = [
+          [0, 0], // 左上
+          [canvas.width - 1, 0], // 右上
+          [0, canvas.height - 1], // 左下
+          [canvas.width - 1, canvas.height - 1] // 右下
+        ];
+        
+        // コーナーの色を取得して背景色を推定
+        const bgColors = corners.map(([x, y]) => {
+          const index = (y * canvas.width + x) * 4;
+          return [data[index], data[index + 1], data[index + 2]];
+        });
+        
+        // 最も多い色を背景色とする（簡易版）
+        const bgColor = bgColors[0]; // 左上の色を背景色とする
+        
+        // 色の閾値
+        const threshold = 30;
+        
+        // 各ピクセルをチェックして背景色に近い場合は透明にする
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          
+          // 背景色との差を計算
+          const diff = Math.abs(r - bgColor[0]) + Math.abs(g - bgColor[1]) + Math.abs(b - bgColor[2]);
+          
+          if (diff < threshold) {
+            data[i + 3] = 0; // アルファチャンネルを0（透明）にする
+          }
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+        
+        // 処理済み画像のURLを生成
+        const processedUrl = canvas.toDataURL('image/png');
+        
+        // オーバーレイ画像を更新
+        setOverlayImages(prev => 
+          prev.map(img => 
+            img.id === overlay.id 
+              ? { ...img, displayUrl: processedUrl }
+              : img
+          )
+        );
+      };
+      
+      img.src = overlay.url;
+    } catch (error) {
+      console.error('Background removal error:', error);
+      // エラーの場合は元の画像を使用
+      setOverlayImages(prev => 
+        prev.map(img => 
+          img.id === overlay.id 
+            ? { ...img, displayUrl: img.url }
+            : img
+        )
+      );
+    }
   };
 
   // 角度計算のヘルパー関数
@@ -1022,7 +1122,8 @@ function App() {
                 width: Math.round(overlay.width * imageScale),
                 height: Math.round(overlay.height * imageScale),
                 opacity: overlay.opacity,
-                rotation: overlay.rotation || 0
+                rotation: overlay.rotation || 0,
+                removeBackground: overlay.removeBackground || false
               });
             };
             reader.readAsDataURL(blob);
@@ -1414,6 +1515,20 @@ function App() {
                             onChange={(e) => updateOverlayImage(index, { rotation: parseInt(e.target.value) })}
                             className="opacity-slider"
                           />
+                        </div>
+                        <div className="overlay-opacity-control">
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={overlay.removeBackground || false}
+                              onChange={(e) => updateOverlayImage(index, { removeBackground: e.target.checked })}
+                              style={{ marginRight: '8px' }}
+                            />
+                            背景を透過する
+                          </label>
+                          <small style={{ color: '#666', fontSize: '11px', display: 'block', marginTop: '4px' }}>
+                            ※プレビューは簡易版、生成時は高精度処理
+                          </small>
                         </div>
                         <button
                           onClick={() => removeOverlayImage(index)}
@@ -1947,7 +2062,7 @@ function App() {
                       }}
                     >
                       <img
-                        src={overlay.url}
+                        src={overlay.displayUrl || overlay.url}
                         alt={`Overlay ${index + 1}`}
                         style={{
                           width: '100%',

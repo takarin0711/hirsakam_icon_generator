@@ -10,6 +10,12 @@ import sys
 import emoji
 import requests
 from io import BytesIO
+try:
+    from rembg import remove
+    REMBG_AVAILABLE = True
+except ImportError:
+    REMBG_AVAILABLE = False
+    print("Warning: rembg library not available. Background removal feature will be disabled.")
 
 class HirsakamGenerator:
     def __init__(self, base_image_path="hirsakam.jpg"):
@@ -380,7 +386,42 @@ class HirsakamGenerator:
             # エラーの場合は元の画像をそのまま返す
             return base_image_path
 
-    def add_overlay_image(self, base_image_path, overlay_image_path, x, y, width, height, opacity, rotation=0, output_path=None):
+    def remove_background(self, image_path_or_obj):
+        """画像の背景を透過処理する"""
+        if not REMBG_AVAILABLE:
+            print("Warning: rembg not available, skipping background removal")
+            if isinstance(image_path_or_obj, str):
+                return Image.open(image_path_or_obj)
+            else:
+                return image_path_or_obj
+        
+        try:
+            if isinstance(image_path_or_obj, str):
+                # ファイルパスの場合
+                with open(image_path_or_obj, 'rb') as f:
+                    input_data = f.read()
+            else:
+                # PIL Imageオブジェクトの場合
+                with BytesIO() as buffer:
+                    image_path_or_obj.save(buffer, format='PNG')
+                    input_data = buffer.getvalue()
+            
+            # 背景透過処理
+            output_data = remove(input_data)
+            
+            # 透過済み画像をPILオブジェクトとして返す
+            result_image = Image.open(BytesIO(output_data)).convert('RGBA')
+            return result_image
+            
+        except Exception as e:
+            print(f"Background removal error: {e}")
+            # エラーの場合は元の画像を返す
+            if isinstance(image_path_or_obj, str):
+                return Image.open(image_path_or_obj)
+            else:
+                return image_path_or_obj
+
+    def add_overlay_image(self, base_image_path, overlay_image_path, x, y, width, height, opacity, rotation=0, remove_background=False, output_path=None):
         """オーバーレイ画像を既存の画像に合成"""
         try:
             # ベース画像を読み込み
@@ -388,6 +429,10 @@ class HirsakamGenerator:
             
             # オーバーレイ画像を読み込み
             overlay_image = Image.open(overlay_image_path)
+            
+            # 背景透過処理を適用
+            if remove_background:
+                overlay_image = self.remove_background(overlay_image)
             
             # オーバーレイ画像を指定サイズにリサイズ
             overlay_image = overlay_image.resize((int(width), int(height)), Image.Resampling.LANCZOS)
