@@ -117,7 +117,7 @@ async def generate_icon(
         
         # 出力ファイル名を生成（親ディレクトリのoutputフォルダ）
         output_id = str(uuid.uuid4())
-        output_path = os.path.join("..", "output", f"hirsakam_{output_id}.jpg")
+        output_path = os.path.join("..", "output", f"image_{output_id}.jpg")
         
         # ベース画像をコピーして開始
         result_path = output_path

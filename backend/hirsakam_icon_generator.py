@@ -10,6 +10,7 @@ import sys
 import emoji
 import requests
 from io import BytesIO
+import glob
 try:
     from rembg import remove
     REMBG_AVAILABLE = True
@@ -32,13 +33,19 @@ class HirsakamGenerator:
     def get_font(self, font_size=48, is_emoji=False):
         """フォントを取得する"""
         if is_emoji:
-            # macOSの絵文字フォントパスを詳細に試す
+            # 絵文字フォントの候補（macOS + Linux）
             emoji_fonts = [
+                # macOS
                 "/System/Library/Fonts/Apple Color Emoji.ttc",
                 "/System/Library/Fonts/Supplemental/Apple Color Emoji.ttc",
                 "/Library/Fonts/Apple Color Emoji.ttc",
                 "/System/Library/Fonts/Apple Color Emoji.ttf",
-                "/System/Library/Fonts/Supplemental/Apple Color Emoji.ttf"
+                "/System/Library/Fonts/Supplemental/Apple Color Emoji.ttf",
+                # Linux
+                "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/TTF/NotoColorEmoji.ttf",
+                "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
             ]
             
             for font_path in emoji_fonts:
@@ -47,33 +54,123 @@ class HirsakamGenerator:
                         print(f"絵文字フォント見つかりました: {font_path}")
                         return ImageFont.truetype(font_path, font_size)
                 except Exception as e:
-                    print(f"フォント読み込みエラー {font_path}: {e}")
                     continue
             
-            # macOSでSFフォントを試す（絵文字をサポート）
-            try:
-                return ImageFont.truetype("/System/Library/Fonts/SF-Pro-Display-Regular.otf", font_size)
-            except:
-                pass
-            
-            # ヒラギノフォントを試す（絵文字をサポート）
-            try:
-                return ImageFont.truetype("/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc", font_size)
-            except:
-                pass
-            
-            print("Warning: 絵文字フォントが見つかりません。デフォルトフォントを使用します。")
+            print("Warning: 絵文字フォントが見つかりません。テキストフォントを使用します。")
         
-        try:
-            # macOSのヒラギノフォントを試す
-            return ImageFont.truetype("/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc", font_size)
-        except OSError:
+        # テキストフォントの候補（macOS + Linux）
+        text_fonts = [
+            # macOS
+            "/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc",
+            "/System/Library/Fonts/Helvetica.ttc",
+            "/System/Library/Fonts/Arial.ttf",
+            # Linux (CentOS/RHEL/Rocky Linux)
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/TTF/DejaVuSans.ttf",
+            "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/TTF/LiberationSans-Regular.ttf",
+            # 日本語フォント (Linux)
+            "/usr/share/fonts/truetype/noto-cjk/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/TTF/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/takao-gothic/TakaoPGothic.ttf",
+            "/usr/share/fonts/takao/TakaoPGothic.ttf",
+            # 汎用的なLinuxフォント
+            "/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf",
+            "/usr/share/fonts/TTF/arial.ttf",
+            "/usr/share/fonts/corefonts/arial.ttf"
+        ]
+        
+        for font_path in text_fonts:
             try:
-                # macOSの代替フォント
-                return ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", font_size)
-            except OSError:
-                # デフォルトフォント
-                return ImageFont.load_default()
+                if os.path.exists(font_path):
+                    print(f"テキストフォント見つかりました: {font_path}")
+                    return ImageFont.truetype(font_path, font_size)
+            except Exception as e:
+                continue
+        
+        # 動的フォント検索を試行
+        print("指定フォントが見つかりません。システムフォントを検索中...")
+        dynamic_font = self._find_system_font(font_size)
+        if dynamic_font:
+            return dynamic_font
+            
+        print("Warning: TTFフォントが見つかりません。デフォルトフォントを使用します。")
+        # フォント診断情報を出力
+        self._print_font_diagnostics()
+        return ImageFont.load_default()
+    
+    def _print_font_diagnostics(self):
+        """フォント診断情報を出力"""
+        print("=== フォント診断情報 ===")
+        font_dirs = [
+            "/usr/share/fonts",
+            "/usr/local/share/fonts",
+            "/System/Library/Fonts",
+            "~/.fonts"
+        ]
+        
+        for font_dir in font_dirs:
+            expanded_dir = os.path.expanduser(font_dir)
+            if os.path.exists(expanded_dir):
+                print(f"フォントディレクトリ存在: {expanded_dir}")
+                try:
+                    fonts = []
+                    for root, dirs, files in os.walk(expanded_dir):
+                        for file in files[:5]:  # 最初の5つだけ表示
+                            if file.lower().endswith(('.ttf', '.ttc', '.otf')):
+                                fonts.append(os.path.join(root, file))
+                    if fonts:
+                        print(f"  利用可能フォント例: {fonts[:3]}")
+                    else:
+                        print(f"  TTF/TTCファイルが見つかりません")
+                except Exception as e:
+                    print(f"  アクセスエラー: {e}")
+            else:
+                print(f"フォントディレクトリ不存在: {expanded_dir}")
+        print("=======================")
+    
+    def _find_system_font(self, font_size):
+        """システム内のフォントを動的に検索"""
+        search_dirs = [
+            "/usr/share/fonts/",
+            "/usr/local/share/fonts/",
+            "/System/Library/Fonts/",
+            os.path.expanduser("~/.fonts/")
+        ]
+        
+        # 優先度順でフォントパターンを検索
+        font_patterns = [
+            "**/NotoSans*.ttf",
+            "**/NotoSansCJK*.ttc",
+            "**/DejaVu*.ttf",
+            "**/Liberation*.ttf",
+            "**/Takao*.ttf",
+            "**/Arial*.ttf",
+            "**/Helvetica*.ttf",
+            "**/*.ttf",
+            "**/*.ttc"
+        ]
+        
+        for search_dir in search_dirs:
+            if not os.path.exists(search_dir):
+                continue
+                
+            for pattern in font_patterns:
+                font_path = os.path.join(search_dir, pattern)
+                matches = glob.glob(font_path, recursive=True)
+                
+                for match in matches:
+                    try:
+                        font = ImageFont.truetype(match, font_size)
+                        print(f"動的検索で見つかったフォント: {match}")
+                        return font
+                    except Exception as e:
+                        continue
+        
+        return None
     
     def add_text_to_image(self, image, text, position, color=(255, 255, 255), font_size=48, is_face_overlay=False, is_emoji=False):
         """画像にテキストを追加する"""
@@ -309,7 +406,7 @@ class HirsakamGenerator:
         # 出力パスを決定
         if output_path is None:
             os.makedirs("output", exist_ok=True)
-            output_path = f"output/hirsakam_emoji_{ord(emoji_char):x}.jpg"
+            output_path = f"output/image_emoji_{ord(emoji_char):x}.jpg"
         
         # 画像を保存（RGBAの場合はRGBに変換、元の背景を保持）
         if image.mode == 'RGBA':
@@ -332,7 +429,7 @@ class HirsakamGenerator:
         # 出力パスを決定
         if output_path is None:
             os.makedirs("output", exist_ok=True)
-            output_path = f"output/hirsakam_custom.jpg"
+            output_path = f"output/image_custom.jpg"
         
         # 画像を保存（RGBAの場合はRGBに変換、元の背景を保持）
         if image.mode == 'RGBA':
