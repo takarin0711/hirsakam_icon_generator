@@ -243,6 +243,24 @@ class HirsakamGenerator:
         
         return None
     
+    def _apply_transforms(self, image, rotation, flip_horizontal, element_type="overlay"):
+        """画像に回転と左右反転を適用する共通関数"""
+        if rotation != 0:
+            # 要素タイプと左右反転状態に応じて回転方向を調整
+            if element_type == "overlay":
+                adjusted_rotation = rotation if flip_horizontal else -rotation
+            else:  # emoji
+                adjusted_rotation = rotation if flip_horizontal else -rotation
+            
+            image = image.rotate(adjusted_rotation, expand=True)
+            print(f"{element_type}回転完了: {adjusted_rotation}度")
+        
+        if flip_horizontal:
+            image = image.transpose(Image.FLIP_LEFT_RIGHT)
+            print(f"{element_type}左右反転完了")
+        
+        return image
+    
     def add_text_to_image(self, image, text, position, color=(255, 255, 255), font_size=48, is_face_overlay=False, is_emoji=False):
         """画像にテキストを追加する"""
         # 絵文字の場合は専用の処理
@@ -589,7 +607,7 @@ class HirsakamGenerator:
             else:
                 return image_path_or_obj
 
-    def add_overlay_image(self, base_image_path, overlay_image_path, x, y, width, height, opacity, rotation=0, remove_background=False, output_path=None):
+    def add_overlay_image(self, base_image_path, overlay_image_path, x, y, width, height, opacity, rotation=0, remove_background=False, flip_horizontal=False, output_path=None):
         """オーバーレイ画像を既存の画像に合成"""
         try:
             # ベース画像を読み込み
@@ -618,11 +636,11 @@ class HirsakamGenerator:
                 alpha = alpha.point(lambda p: int(p * opacity))
                 overlay_image.putalpha(alpha)
             
-            # 回転を適用（PillowとCSSの回転方向の違いを修正）
+            # 回転と左右反転を適用
+            overlay_image = self._apply_transforms(overlay_image, rotation, flip_horizontal, "オーバーレイ画像")
+            
+            # 回転後のサイズを更新
             if rotation != 0:
-                overlay_image = overlay_image.rotate(-rotation, expand=True)
-                print(f"オーバーレイ画像回転完了: -{rotation}度（Pillow用調整）")
-                # 回転後のサイズを更新
                 width = overlay_image.width
                 height = overlay_image.height
             
@@ -744,7 +762,7 @@ class HirsakamGenerator:
         
         return image
     
-    def add_emoji_to_image(self, input_path, emoji_char, position, size=164, rotation=0, output_path=None):
+    def add_emoji_to_image(self, input_path, emoji_char, position, size=164, rotation=0, flip_horizontal=False, output_path=None):
         """既存の画像に絵文字を追加する（透明性を保持）"""
         try:
             # 既存の画像を読み込み
@@ -755,7 +773,7 @@ class HirsakamGenerator:
                 output_path = input_path
                 
             # 絵文字を追加
-            result_image = self.add_emoji_to_image_obj(image, emoji_char, position, size, rotation)
+            result_image = self.add_emoji_to_image_obj(image, emoji_char, position, size, rotation, flip_horizontal)
             
             # RGBモードで保存（元の背景を保持）
             if result_image.mode != 'RGB':
@@ -777,7 +795,7 @@ class HirsakamGenerator:
             print(f"絵文字追加エラー: {e}")
             return input_path
     
-    def add_emoji_to_image_obj(self, image, emoji_char, position, size=164, rotation=0):
+    def add_emoji_to_image_obj(self, image, emoji_char, position, size=164, rotation=0, flip_horizontal=False):
         """画像オブジェクトに絵文字を追加する（回転対応、透明性保持）"""
         try:
             # 絵文字画像をダウンロード（透明性処理済み）
@@ -788,10 +806,8 @@ class HirsakamGenerator:
             
             print(f"絵文字合成開始: {emoji_char}, 回転: {rotation}度")
             
-            if rotation != 0:
-                # PillowとCSSの回転方向の違いを修正（負の値で時計回り）
-                emoji_image = emoji_image.rotate(-rotation, expand=True)
-                print(f"絵文字回転完了: -{rotation}度（Pillow用調整）")
+            # 回転と左右反転を適用
+            emoji_image = self._apply_transforms(emoji_image, rotation, flip_horizontal, "絵文字")
             
             # 位置調整して合成
             paste_x = position[0] - emoji_image.width // 2

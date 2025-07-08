@@ -15,6 +15,7 @@ function App() {
   const [emojiPosition, setEmojiPosition] = useState({ x: 260, y: 180 });
   const [textRotation, setTextRotation] = useState(0);
   const [emojiRotation, setEmojiRotation] = useState(0);
+  const [emojiFlipHorizontal, setEmojiFlipHorizontal] = useState(false);
   
   // 現在操作中の要素
   const [activeElement, setActiveElement] = useState(null); // 'text', 'emoji', null
@@ -341,6 +342,12 @@ function App() {
         canvas.width = img.width;
         canvas.height = img.height;
         
+        // 水平反転が有効な場合は変換を適用
+        if (overlay.flipHorizontal) {
+          ctx.scale(-1, 1);
+          ctx.translate(-canvas.width, 0);
+        }
+        
         ctx.drawImage(img, 0, 0);
         
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -380,10 +387,18 @@ function App() {
           }
         }
         
-        ctx.putImageData(imageData, 0, 0);
+        // 背景透過処理後のイメージデータを再描画
+        // 新しいキャンバスを作成して処理済みの画像を描画
+        const finalCanvas = document.createElement('canvas');
+        const finalCtx = finalCanvas.getContext('2d');
+        
+        finalCanvas.width = img.width;
+        finalCanvas.height = img.height;
+        
+        finalCtx.putImageData(imageData, 0, 0);
         
         // 処理済み画像のURLを生成
-        const processedUrl = canvas.toDataURL('image/png');
+        const processedUrl = finalCanvas.toDataURL('image/png');
         
         // オーバーレイ画像を更新
         setOverlayImages(prev => 
@@ -1088,6 +1103,7 @@ function App() {
         data.append('emoji_y', Math.round(emojiPosition.y * imageScale));
         data.append('emoji_size', Math.round(formData.emojiSize * imageScale));
         data.append('emoji_rotation', emojiRotation);
+        data.append('emoji_flip_horizontal', emojiFlipHorizontal);
       }
       
       if (baseImage) {
@@ -1123,7 +1139,8 @@ function App() {
                 height: Math.round(overlay.height * imageScale),
                 opacity: overlay.opacity,
                 rotation: overlay.rotation || 0,
-                removeBackground: overlay.removeBackground || false
+                removeBackground: overlay.removeBackground || false,
+                flipHorizontal: overlay.flipHorizontal || false
               });
             };
             reader.readAsDataURL(blob);
@@ -1530,6 +1547,17 @@ function App() {
                             ※プレビューは簡易版、生成時は高精度処理
                           </small>
                         </div>
+                        <div className="overlay-opacity-control">
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={overlay.flipHorizontal || false}
+                              onChange={(e) => updateOverlayImage(index, { flipHorizontal: e.target.checked })}
+                              style={{ marginRight: '8px' }}
+                            />
+                            左右反転
+                          </label>
+                        </div>
                         <button
                           onClick={() => removeOverlayImage(index)}
                           className="remove-overlay-button"
@@ -1717,6 +1745,19 @@ function App() {
                         />
                       </div>
                     </div>
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={emojiFlipHorizontal}
+                            onChange={(e) => setEmojiFlipHorizontal(e.target.checked)}
+                            style={{ marginRight: '8px' }}
+                          />
+                          左右反転
+                        </label>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1797,7 +1838,7 @@ function App() {
                         >
                           <div className="bounding-box" style={{ border: '2px dashed transparent' }}> {/* 透明ボーダーでレイアウト保持 */}
                             <div style={{
-                              transform: `rotate(${emojiRotation}deg)`,
+                              transform: `rotate(${emojiRotation}deg)${emojiFlipHorizontal ? ' scaleX(-1)' : ''}`,
                               transformOrigin: 'center center',
                               display: 'inline-block'
                             }}>
@@ -1960,7 +2001,7 @@ function App() {
                     >
                       <div className="bounding-box">
                         <div style={{
-                          transform: `rotate(${emojiRotation}deg)`,
+                          transform: `rotate(${emojiRotation}deg)${emojiFlipHorizontal ? ' scaleX(-1)' : ''}`,
                           transformOrigin: 'center center',
                           display: 'inline-block'
                         }}>
@@ -2071,7 +2112,7 @@ function App() {
                           opacity: overlay.opacity,
                           pointerEvents: 'none', // 画像自体はポインターイベントを受け取らない
                           borderRadius: '2px',
-                          transform: `rotate(${overlay.rotation || 0}deg)`,
+                          transform: `rotate(${overlay.rotation || 0}deg)${overlay.flipHorizontal ? ' scaleX(-1)' : ''}`,
                           transformOrigin: 'center center'
                         }}
                         draggable={false}
