@@ -85,6 +85,7 @@ async def generate_icon(
     text_color: str = Form("#ffffff"),
     text_rotation: int = Form(0),  # テキストの回転角度
     emoji_rotation: int = Form(0),  # 絵文字の回転角度
+    emoji_flip_horizontal: bool = Form(False),  # 絵文字の左右反転
     base_image: Optional[UploadFile] = File(None),
     drawing_data: Optional[UploadFile] = File(None),
     overlay_images: Optional[str] = Form(None),  # JSON string with overlay data
@@ -161,6 +162,7 @@ async def generate_icon(
                     (emoji_x, emoji_y), 
                     emoji_size,
                     rotation=emoji_rotation,
+                    flip_horizontal=emoji_flip_horizontal,
                     output_path=current_path
                 )
             elif layer_type == 'overlay' and overlay_images:
@@ -190,6 +192,7 @@ async def generate_icon(
                             overlay['opacity'],
                             overlay.get('rotation', 0),
                             overlay.get('removeBackground', False),
+                            overlay.get('flipHorizontal', False),
                             current_result_path
                         )
                         
