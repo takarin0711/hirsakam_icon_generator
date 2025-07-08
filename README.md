@@ -364,12 +364,25 @@ sudo apt-get install fonts-noto-cjk
 
 **フォント診断**:
 ```bash
-# インストール済みフォントの確認
+# 日本語フォントの確認（重要）
+fc-list | grep -i "noto.*cjk\|takao\|ipa"
+
+# 全フォントの確認
 fc-list | grep -i "dejavu\|liberation\|noto"
 
 # フォントディレクトリの確認
 ls -la /usr/share/fonts/
+
+# 日本語フォントファイルの直接確認
+find /usr/share/fonts -name "*CJK*" -o -name "*Takao*" -o -name "*IPA*"
 ```
+
+**自動日本語フォント検出機能**:
+- システムは日本語文字を自動検出し、CJKフォントを優先使用
+- Rocky LinuxでDejaVu/Liberationフォントが選択される問題を解決
+- 動的フォント検索も日本語フォント優先に変更
+
+**重要**: 日本語テキストを使用する場合は必ずCJK（中日韓）フォントをインストールしてください。
 
 ### 画像の回転がうまくいかない
 - マウスドラッグ回転: 要素の中心を基準に赤いハンドルをドラッグ（テキスト・絵文字・オーバーレイ画像すべて対応）

@@ -30,7 +30,20 @@ class HirsakamGenerator:
             raise FileNotFoundError(f"ベース画像 {self.base_image_path} が見つかりません")
         return Image.open(self.base_image_path)
     
-    def get_font(self, font_size=48, is_emoji=False):
+    def _contains_japanese(self, text):
+        """テキストに日本語文字が含まれているかチェック"""
+        if not text:
+            return False
+        for char in text:
+            code = ord(char)
+            if (0x3040 <= code <= 0x309F or  # ひらがな
+                0x30A0 <= code <= 0x30FF or  # カタカナ  
+                0x4E00 <= code <= 0x9FAF or  # 漢字
+                0xFF00 <= code <= 0xFFEF):   # 全角文字
+                return True
+        return False
+
+    def get_font(self, font_size=48, is_emoji=False, text=""):
         """フォントを取得する"""
         if is_emoji:
             # 絵文字フォントの候補（macOS + Linux）
@@ -58,25 +71,33 @@ class HirsakamGenerator:
             
             print("Warning: 絵文字フォントが見つかりません。テキストフォントを使用します。")
         
+        # 日本語テキストの場合は日本語フォントを強制検索
+        if self._contains_japanese(text):
+            print("日本語テキストを検出。日本語フォントを優先検索します。")
+            japanese_font = self._find_japanese_font(font_size)
+            if japanese_font:
+                return japanese_font
+            print("Warning: 日本語フォントが見つかりません。汎用フォントを使用します。")
+        
         # テキストフォントの候補（macOS + Linux）
         text_fonts = [
             # macOS
             "/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc",
             "/System/Library/Fonts/Helvetica.ttc",
             "/System/Library/Fonts/Arial.ttf",
-            # Linux (CentOS/RHEL/Rocky Linux)
+            # 日本語フォント (Linux) - 優先度を上げる
+            "/usr/share/fonts/truetype/noto-cjk/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/TTF/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/takao-gothic/TakaoPGothic.ttf",
+            "/usr/share/fonts/takao/TakaoPGothic.ttf",
+            # Linux (CentOS/RHEL/Rocky Linux) - 日本語非対応フォント
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
             "/usr/share/fonts/TTF/DejaVuSans.ttf",
             "/usr/share/fonts/dejavu/DejaVuSans.ttf",
             "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
             "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
             "/usr/share/fonts/TTF/LiberationSans-Regular.ttf",
-            # 日本語フォント (Linux)
-            "/usr/share/fonts/truetype/noto-cjk/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/TTF/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/truetype/takao-gothic/TakaoPGothic.ttf",
-            "/usr/share/fonts/takao/TakaoPGothic.ttf",
             # 汎用的なLinuxフォント
             "/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf",
             "/usr/share/fonts/TTF/arial.ttf",
@@ -101,6 +122,46 @@ class HirsakamGenerator:
         # フォント診断情報を出力
         self._print_font_diagnostics()
         return ImageFont.load_default()
+    
+    def _find_japanese_font(self, font_size):
+        """日本語対応フォントを優先的に検索"""
+        search_dirs = [
+            "/usr/share/fonts/",
+            "/usr/local/share/fonts/",
+            "/System/Library/Fonts/",
+            os.path.expanduser("~/.fonts/")
+        ]
+        
+        # 日本語フォントのパターン（優先度順）
+        japanese_patterns = [
+            "**/NotoSansCJK*.ttc",
+            "**/NotoSansCJK*.ttf", 
+            "**/NotoSans*CJK*.ttc",
+            "**/NotoSans*CJK*.ttf",
+            "**/Takao*.ttf",
+            "**/VLGothic*.ttf",
+            "**/IPAexGothic*.ttf",
+            "**/IPAGothic*.ttf",
+            "**/ヒラギノ*.ttc"
+        ]
+        
+        for search_dir in search_dirs:
+            if not os.path.exists(search_dir):
+                continue
+                
+            for pattern in japanese_patterns:
+                font_path = os.path.join(search_dir, pattern)
+                matches = glob.glob(font_path, recursive=True)
+                
+                for match in matches:
+                    try:
+                        font = ImageFont.truetype(match, font_size)
+                        print(f"日本語フォント見つかりました: {match}")
+                        return font
+                    except Exception as e:
+                        continue
+        
+        return None
     
     def _print_font_diagnostics(self):
         """フォント診断情報を出力"""
@@ -141,15 +202,25 @@ class HirsakamGenerator:
             os.path.expanduser("~/.fonts/")
         ]
         
-        # 優先度順でフォントパターンを検索
+        # 日本語対応フォントを最優先にする
         font_patterns = [
-            "**/NotoSans*.ttf",
+            # 日本語フォント（最優先）
             "**/NotoSansCJK*.ttc",
-            "**/DejaVu*.ttf",
-            "**/Liberation*.ttf",
+            "**/NotoSansCJK*.ttf", 
+            "**/NotoSans*CJK*.ttc",
+            "**/NotoSans*CJK*.ttf",
             "**/Takao*.ttf",
+            "**/VLGothic*.ttf",
+            "**/IPAexGothic*.ttf",
+            "**/IPAGothic*.ttf",
+            # 日本語サポートのある汎用フォント
+            "**/NotoSans*.ttf",
+            # 英数字フォント（日本語非対応）
+            "**/Liberation*.ttf",
+            "**/DejaVu*.ttf",
             "**/Arial*.ttf",
             "**/Helvetica*.ttf",
+            # 最後の手段
             "**/*.ttf",
             "**/*.ttc"
         ]
@@ -179,7 +250,7 @@ class HirsakamGenerator:
             return self.add_emoji_to_image(image, text, position, font_size)
         
         draw = ImageDraw.Draw(image)
-        font = self.get_font(font_size, is_emoji)
+        font = self.get_font(font_size, is_emoji, text=text)
         
         if is_face_overlay:
             # 顔に被せる場合は背景を半透明にする
@@ -638,7 +709,7 @@ class HirsakamGenerator:
     def add_text_to_image_obj(self, image, text, position, color=(255, 255, 255), font_size=48, rotation=0):
         """画像オブジェクトにテキストを追加する（回転対応）"""
         draw = ImageDraw.Draw(image)
-        font = self.get_font(font_size)
+        font = self.get_font(font_size, text=text)
         
         if rotation != 0:
             # 回転する場合はテキストを一時的な透明画像に描画してから回転
