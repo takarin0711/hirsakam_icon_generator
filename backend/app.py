@@ -266,16 +266,28 @@ async def download_file(filename: str):
     )
 
 @app.get("/gallery")
-async def get_gallery(sort: str = "desc"):
+async def get_gallery(sort: str = "desc", offset: int = 0, limit: int = 20):
     """
     生成済みの画像一覧を取得
     Args:
         sort: ソート順 ("asc" = 古い順, "desc" = 新しい順, デフォルト: desc)
+        offset: 開始位置 (デフォルト: 0)
+        limit: 取得件数 (デフォルト: 20, 最大: 100)
     """
     try:
+        # limitの上限を設定
+        limit = min(limit, 100)
+        
         output_dir = os.path.join("..", "output")
         if not os.path.exists(output_dir):
-            return {"images": []}
+            return {
+                "images": [],
+                "total": 0,
+                "offset": offset,
+                "limit": limit,
+                "has_next": False,
+                "has_prev": False
+            }
         
         images = []
         for filename in os.listdir(output_dir):
@@ -297,11 +309,28 @@ async def get_gallery(sort: str = "desc"):
             # 新しい順（降順）- デフォルト
             images.sort(key=lambda x: x["created_at"], reverse=True)
         
+        # 総件数を取得
+        total = len(images)
+        
+        # ページング処理
+        paginated_images = images[offset:offset + limit]
+        
         # created_atフィールドを除去（フロントエンドには不要）
-        for image in images:
+        for image in paginated_images:
             del image["created_at"]
         
-        return {"images": images}
+        # ページング情報を計算
+        has_next = offset + limit < total
+        has_prev = offset > 0
+        
+        return {
+            "images": paginated_images,
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "has_next": has_next,
+            "has_prev": has_prev
+        }
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

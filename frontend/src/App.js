@@ -75,6 +75,16 @@ function App() {
   // ギャラリーソート順管理
   const [gallerySortOrder, setGallerySortOrder] = useState('desc'); // 'desc' = 新しい順, 'asc' = 古い順
   
+  // ギャラリーページング管理
+  const [galleryPagination, setGalleryPagination] = useState({
+    offset: 0,
+    limit: 16,
+    total: 0,
+    has_next: false,
+    has_prev: false
+  });
+  const [currentPage, setCurrentPage] = useState(1);
+  
   const previewRef = useRef(null);
   const imageRef = useRef(null);
   const drawingCanvasRef = useRef(null);
@@ -1181,14 +1191,24 @@ function App() {
     }
   };
 
-  const loadGallery = async (sort = null) => {
+  const loadGallery = async (sort = null, page = null) => {
     try {
       const sortOrder = sort || gallerySortOrder;
-      const url = `${getApiBaseUrl()}/gallery?sort=${sortOrder}`;
+      const pageNum = page || currentPage;
+      const offset = (pageNum - 1) * galleryPagination.limit;
+      
+      const url = `${getApiBaseUrl()}/gallery?sort=${sortOrder}&offset=${offset}&limit=${galleryPagination.limit}`;
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
         setGallery(data.images || []);
+        setGalleryPagination({
+          offset: data.offset,
+          limit: data.limit,
+          total: data.total,
+          has_next: data.has_next,
+          has_prev: data.has_prev
+        });
       }
     } catch (error) {
       console.error('Gallery loading error:', error);
@@ -1197,7 +1217,13 @@ function App() {
   
   const handleGallerySortChange = async (newSortOrder) => {
     setGallerySortOrder(newSortOrder);
-    await loadGallery(newSortOrder);
+    setCurrentPage(1); // ソート変更時は1ページ目に戻る
+    await loadGallery(newSortOrder, 1);
+  };
+  
+  const handlePageChange = async (newPage) => {
+    setCurrentPage(newPage);
+    await loadGallery(null, newPage);
   };
 
   const downloadImage = (url, filename) => {
@@ -2315,20 +2341,29 @@ function App() {
 
         <div className="gallery-section">
           <h2>ギャラリー</h2>
-          <div className="gallery-sort-controls">
-            <span>並び順: </span>
-            <button 
-              className={`sort-button ${gallerySortOrder === 'desc' ? 'active' : ''}`}
-              onClick={() => handleGallerySortChange('desc')}
-            >
-              新しい順
-            </button>
-            <button 
-              className={`sort-button ${gallerySortOrder === 'asc' ? 'active' : ''}`}
-              onClick={() => handleGallerySortChange('asc')}
-            >
-              古い順
-            </button>
+          <div className="gallery-controls">
+            <div className="gallery-sort-controls">
+              <span>並び順: </span>
+              <button 
+                className={`sort-button ${gallerySortOrder === 'desc' ? 'active' : ''}`}
+                onClick={() => handleGallerySortChange('desc')}
+              >
+                新しい順
+              </button>
+              <button 
+                className={`sort-button ${gallerySortOrder === 'asc' ? 'active' : ''}`}
+                onClick={() => handleGallerySortChange('asc')}
+              >
+                古い順
+              </button>
+            </div>
+            <div className="gallery-info">
+              {galleryPagination.total > 0 && (
+                <span>
+                  全{galleryPagination.total}件中 {galleryPagination.offset + 1}〜{Math.min(galleryPagination.offset + galleryPagination.limit, galleryPagination.total)}件を表示
+                </span>
+              )}
+            </div>
           </div>
           <div className="gallery-grid">
             {gallery.map((image, index) => (
@@ -2347,6 +2382,70 @@ function App() {
               </div>
             ))}
           </div>
+          
+          {/* ページネーション */}
+          {galleryPagination.total > galleryPagination.limit && (
+            <div className="gallery-pagination">
+              <button 
+                className="pagination-button"
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={!galleryPagination.has_prev}
+              >
+                ← 前へ
+              </button>
+              
+              <div className="pagination-info">
+                {Math.max(1, currentPage - 2) !== 1 && (
+                  <>
+                    <button 
+                      className="pagination-number"
+                      onClick={() => handlePageChange(1)}
+                    >
+                      1
+                    </button>
+                    {Math.max(1, currentPage - 2) > 2 && <span className="pagination-ellipsis">...</span>}
+                  </>
+                )}
+                
+                {Array.from({ length: Math.min(5, Math.ceil(galleryPagination.total / galleryPagination.limit)) }, (_, i) => {
+                  const pageNum = Math.max(1, currentPage - 2) + i;
+                  const totalPages = Math.ceil(galleryPagination.total / galleryPagination.limit);
+                  if (pageNum <= totalPages) {
+                    return (
+                      <button 
+                        key={pageNum}
+                        className={`pagination-number ${pageNum === currentPage ? 'active' : ''}`}
+                        onClick={() => handlePageChange(pageNum)}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  }
+                  return null;
+                })}
+                
+                {Math.min(currentPage + 2, Math.ceil(galleryPagination.total / galleryPagination.limit)) !== Math.ceil(galleryPagination.total / galleryPagination.limit) && (
+                  <>
+                    {Math.min(currentPage + 2, Math.ceil(galleryPagination.total / galleryPagination.limit)) < Math.ceil(galleryPagination.total / galleryPagination.limit) - 1 && <span className="pagination-ellipsis">...</span>}
+                    <button 
+                      className="pagination-number"
+                      onClick={() => handlePageChange(Math.ceil(galleryPagination.total / galleryPagination.limit))}
+                    >
+                      {Math.ceil(galleryPagination.total / galleryPagination.limit)}
+                    </button>
+                  </>
+                )}
+              </div>
+              
+              <button 
+                className="pagination-button"
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={!galleryPagination.has_next}
+              >
+                次へ →
+              </button>
+            </div>
+          )}
         </div>
       </div>
       <EmojiPicker />
