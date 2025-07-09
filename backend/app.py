@@ -266,9 +266,11 @@ async def download_file(filename: str):
     )
 
 @app.get("/gallery")
-async def get_gallery():
+async def get_gallery(sort: str = "desc"):
     """
     生成済みの画像一覧を取得
+    Args:
+        sort: ソート順 ("asc" = 古い順, "desc" = 新しい順, デフォルト: desc)
     """
     try:
         output_dir = os.path.join("..", "output")
@@ -278,10 +280,26 @@ async def get_gallery():
         images = []
         for filename in os.listdir(output_dir):
             if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+                file_path = os.path.join(output_dir, filename)
+                # ファイルの作成時刻を取得
+                creation_time = os.path.getctime(file_path)
                 images.append({
                     "filename": filename,
-                    "url": f"/download/{filename}"
+                    "url": f"/download/{filename}",
+                    "created_at": creation_time
                 })
+        
+        # ソート順に応じて並び替え
+        if sort.lower() == "asc":
+            # 古い順（昇順）
+            images.sort(key=lambda x: x["created_at"])
+        else:
+            # 新しい順（降順）- デフォルト
+            images.sort(key=lambda x: x["created_at"], reverse=True)
+        
+        # created_atフィールドを除去（フロントエンドには不要）
+        for image in images:
+            del image["created_at"]
         
         return {"images": images}
         

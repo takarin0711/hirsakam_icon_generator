@@ -1111,3 +1111,48 @@ h1 {
   color: #666;
   font-style: italic;
 }
+
+/* ギャラリーソート控えのスタイル */
+.gallery-sort-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding: 10px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.gallery-sort-controls span {
+  font-size: 14px;
+  font-weight: 600;
+  color: #495057;
+}
+
+.sort-button {
+  padding: 6px 12px;
+  border: 1px solid #dee2e6;
+  background: white;
+  color: #495057;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.sort-button:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.sort-button.active {
+  background: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
+.sort-button.active:hover {
+  background: #0056b3;
+  border-color: #0056b3;
+}

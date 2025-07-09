@@ -72,6 +72,9 @@ function App() {
   const [isDraggingLayer, setIsDraggingLayer] = useState(false);
   const [draggedLayerIndex, setDraggedLayerIndex] = useState(-1);
   
+  // ギャラリーソート順管理
+  const [gallerySortOrder, setGallerySortOrder] = useState('desc'); // 'desc' = 新しい順, 'asc' = 古い順
+  
   const previewRef = useRef(null);
   const imageRef = useRef(null);
   const drawingCanvasRef = useRef(null);
@@ -1178,9 +1181,11 @@ function App() {
     }
   };
 
-  const loadGallery = async () => {
+  const loadGallery = async (sort = null) => {
     try {
-      const response = await fetch(`${getApiBaseUrl()}/gallery`);
+      const sortOrder = sort || gallerySortOrder;
+      const url = `${getApiBaseUrl()}/gallery?sort=${sortOrder}`;
+      const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
         setGallery(data.images || []);
@@ -1188,6 +1193,11 @@ function App() {
     } catch (error) {
       console.error('Gallery loading error:', error);
     }
+  };
+  
+  const handleGallerySortChange = async (newSortOrder) => {
+    setGallerySortOrder(newSortOrder);
+    await loadGallery(newSortOrder);
   };
 
   const downloadImage = (url, filename) => {
@@ -2305,6 +2315,21 @@ function App() {
 
         <div className="gallery-section">
           <h2>ギャラリー</h2>
+          <div className="gallery-sort-controls">
+            <span>並び順: </span>
+            <button 
+              className={`sort-button ${gallerySortOrder === 'desc' ? 'active' : ''}`}
+              onClick={() => handleGallerySortChange('desc')}
+            >
+              新しい順
+            </button>
+            <button 
+              className={`sort-button ${gallerySortOrder === 'asc' ? 'active' : ''}`}
+              onClick={() => handleGallerySortChange('asc')}
+            >
+              古い順
+            </button>
+          </div>
           <div className="gallery-grid">
             {gallery.map((image, index) => (
               <div key={index} className="gallery-item">
