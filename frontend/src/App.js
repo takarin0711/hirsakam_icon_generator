@@ -1898,10 +1898,11 @@ function App() {
                         <div 
                           className="text-overlay-container"
                           style={{
-                            left: textPosition.x - 100,
-                            top: textPosition.y - 30,
-                            width: 200,
-                            height: 60,
+                            left: textPosition.x,
+                            top: textPosition.y,
+                            width: 'auto',
+                            height: 'auto',
+                            transform: 'translate(-50%, -50%)',
                             pointerEvents: 'none',
                             zIndex: getLayerZIndex('text'),
                             border: '2px dashed transparent' // 透明ボーダーで座標計算を通常表示と一致
@@ -1920,7 +1921,11 @@ function App() {
                                 transformOrigin: 'center center'
                               }}
                             >
-                              {formData.text}
+                              {formData.text.split('\n').map((line, index) => (
+                                <div key={index} style={{ margin: 0, padding: 0, whiteSpace: 'nowrap' }}>
+                                  {line || '\u00A0'}
+                                </div>
+                              ))}
                             </div>
                           </div>
                         </div>
@@ -1933,10 +1938,11 @@ function App() {
                     <div 
                       className="text-overlay-container"
                       style={{
-                        left: textPosition.x - 100,
-                        top: textPosition.y - 30,
-                        width: 200,
-                        height: 60,
+                        left: textPosition.x,
+                        top: textPosition.y,
+                        width: 'auto',
+                        height: 'auto',
+                        transform: 'translate(-50%, -50%)',
                         cursor: drawingMode ? 'default' : (isDragging && activeElement === 'text' ? 'grabbing' : 'grab'),
                         userSelect: 'none',
                         pointerEvents: drawingMode ? 'none' : 'auto',
@@ -1964,7 +1970,11 @@ function App() {
                             transformOrigin: 'center center'
                           }}
                         >
-                          {formData.text}
+                          {formData.text.split('\n').map((line, index) => (
+                            <div key={index} style={{ margin: 0, padding: 0, whiteSpace: 'nowrap' }}>
+                              {line || '\u00A0'}
+                            </div>
+                          ))}
                         </div>
                       
                         {/* テキスト用リサイズハンドル */}

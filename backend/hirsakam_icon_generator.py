@@ -725,20 +725,52 @@ class HirsakamGenerator:
             return input_path
     
     def add_text_to_image_obj(self, image, text, position, color=(255, 255, 255), font_size=48, rotation=0):
-        """画像オブジェクトにテキストを追加する（回転対応）"""
+        """画像オブジェクトにテキストを追加する（回転対応・複数行対応）"""
         draw = ImageDraw.Draw(image)
         font = self.get_font(font_size, text=text)
         
+        # 複数行テキストの処理
+        lines = text.split('\n')
+        line_height = font_size * 1.2  # フロントエンドのlineHeight: 1.2と一致させる（浮動小数点で精度向上）
+        
+        # 全体のテキストサイズを計算
+        total_height = int(len(lines) * line_height)
+        max_width = 0
+        for line in lines:
+            # 空行も含めて計算（フロントエンドと一致させる）
+            if line.strip():
+                bbox = draw.textbbox((0, 0), line, font=font)
+                line_width = bbox[2] - bbox[0]
+                max_width = max(max_width, line_width)
+            else:
+                # 空行の場合は最小幅を確保
+                bbox = draw.textbbox((0, 0), ' ', font=font)
+                line_width = bbox[2] - bbox[0]
+                max_width = max(max_width, line_width)
+        
+        # 最小サイズを確保
+        if max_width == 0:
+            max_width = font_size
+        if total_height == 0:
+            total_height = int(line_height)
+        
         if rotation != 0:
             # 回転する場合はテキストを一時的な透明画像に描画してから回転
-            bbox = draw.textbbox((0, 0), text, font=font)
-            text_width = bbox[2] - bbox[0]
-            text_height = bbox[3] - bbox[1]
-            
-            # テキスト用の透明画像を作成
-            text_img = Image.new('RGBA', (text_width + 50, text_height + 50), (0, 0, 0, 0))
+            # 複数行を考慮したサイズで透明画像を作成
+            text_img = Image.new('RGBA', (max_width + 100, total_height + 100), (0, 0, 0, 0))
             text_draw = ImageDraw.Draw(text_img)
-            text_draw.text((25, 25), text, font=font, fill=color)
+            
+            # 各行を描画
+            for i, line in enumerate(lines):
+                # 空行も含めて描画（フロントエンドと一致させる）
+                if line.strip():
+                    bbox = text_draw.textbbox((0, 0), line, font=font)
+                    line_width = bbox[2] - bbox[0]
+                    # 中央揃えで描画
+                    line_x = 50 + (max_width - line_width) // 2
+                    line_y = int(50 + i * line_height)
+                    text_draw.text((line_x, line_y), line, font=font, fill=color)
+                # 空行の場合は何も描画しないが、スペースは確保される
             
             # PillowとCSSの回転方向の違いを修正（負の値で時計回り）
             rotated_text = text_img.rotate(-rotation, expand=True)
@@ -750,15 +782,22 @@ class HirsakamGenerator:
             # RGBAモードに変換して合成
             if image.mode != 'RGBA':
                 image = image.convert('RGBA')
+            
             image.paste(rotated_text, (paste_x, paste_y), rotated_text)
         else:
-            # 回転なしの場合は直接描画
-            bbox = draw.textbbox((0, 0), text, font=font)
-            text_width = bbox[2] - bbox[0]
-            text_height = bbox[3] - bbox[1]
-            x = position[0] - text_width // 2
-            y = position[1] - text_height // 2
-            draw.text((x, y), text, font=font, fill=color)
+            # 回転なしの場合は直接描画（複数行対応）
+            start_y = int(position[1] - total_height // 2)
+            
+            for i, line in enumerate(lines):
+                # 空行も含めて描画（フロントエンドと一致させる）
+                if line.strip():
+                    bbox = draw.textbbox((0, 0), line, font=font)
+                    line_width = bbox[2] - bbox[0]
+                    # 中央揃えで描画
+                    line_x = position[0] - line_width // 2
+                    line_y = int(start_y + i * line_height)
+                    draw.text((line_x, line_y), line, font=font, fill=color)
+                # 空行の場合は何も描画しないが、スペースは確保される
         
         return image
     
