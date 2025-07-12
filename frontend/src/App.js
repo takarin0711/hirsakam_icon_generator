@@ -92,6 +92,11 @@ function App() {
   const [cropStartPos, setCropStartPos] = useState({ x: 0, y: 0 });
   const [croppedBaseImage, setCroppedBaseImage] = useState(null);
   
+  // ガチャ機能
+  const [showGachaModal, setShowGachaModal] = useState(false);
+  const [gachaResult, setGachaResult] = useState(null);
+  const [isGachaDrawing, setIsGachaDrawing] = useState(false);
+  
   const previewRef = useRef(null);
   const imageRef = useRef(null);
   const drawingCanvasRef = useRef(null);
@@ -870,6 +875,42 @@ function App() {
     setTrimmingMode(false);
     setCropArea({ x: 0, y: 0, width: 0, height: 0 });
     setIsCropping(false);
+  };
+
+  // ガチャ機能
+  const drawGacha = async () => {
+    if (isGachaDrawing) return;
+    
+    try {
+      setIsGachaDrawing(true);
+      setShowGachaModal(true);
+      setGachaResult(null);
+      
+      const response = await fetch(`${getApiBaseUrl()}/gacha`);
+      if (!response.ok) {
+        throw new Error(`サーバーエラー: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      // 少し演出のための遅延
+      setTimeout(() => {
+        setGachaResult(result);
+        setIsGachaDrawing(false);
+      }, 1500);
+      
+    } catch (error) {
+      console.error('ガチャエラー:', error);
+      alert(`ガチャでエラーが発生しました: ${error.message}`);
+      setShowGachaModal(false);
+      setIsGachaDrawing(false);
+    }
+  };
+
+  const closeGachaModal = () => {
+    setShowGachaModal(false);
+    setGachaResult(null);
+    setIsGachaDrawing(false);
   };
 
   const clearDrawing = () => {
@@ -2718,6 +2759,17 @@ function App() {
               </button>
             </div>
           )}
+          
+          {/* ガチャボタン */}
+          <div style={{ textAlign: 'center', marginTop: '20px' }}>
+            <button
+              onClick={drawGacha}
+              disabled={isGachaDrawing}
+              className="gacha-button"
+            >
+              {isGachaDrawing ? '🎰 ガチャ中...' : '🎰 ガチャを引く'}
+            </button>
+          </div>
         </div>
       </div>
       <EmojiPicker />
@@ -2782,6 +2834,37 @@ function App() {
                   <span className="layer-icon">🖼️</span>
                   <span className="layer-name">ベース画像</span>
                   <span className="layer-status">（固定・最下位）</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* ガチャモーダル */}
+      {showGachaModal && gachaResult && (
+        <div className="gacha-modal-overlay">
+          <div className="gacha-modal">
+            <div className="gacha-modal-header">
+              <h3>ガチャ結果</h3>
+              <button
+                onClick={closeGachaModal}
+                className="gacha-modal-close"
+              >
+                ×
+              </button>
+            </div>
+            <div className="gacha-modal-content">
+              <div className="gacha-result">
+                <div className={`gacha-rarity gacha-rarity-${gachaResult.rarity.toLowerCase()}`}>
+                  {gachaResult.rarity}
+                </div>
+                <div className="gacha-image-container">
+                  <img
+                    src={`${getApiBaseUrl()}${gachaResult.image_url}`}
+                    alt={`${gachaResult.rarity} ガチャ画像`}
+                    className="gacha-image"
+                  />
                 </div>
               </div>
             </div>
