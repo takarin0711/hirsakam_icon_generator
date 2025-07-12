@@ -85,6 +85,13 @@ function App() {
   });
   const [currentPage, setCurrentPage] = useState(1);
   
+  // トリミングモード（独立したモード）
+  const [trimmingMode, setTrimmingMode] = useState(false);
+  const [cropArea, setCropArea] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [isCropping, setIsCropping] = useState(false);
+  const [cropStartPos, setCropStartPos] = useState({ x: 0, y: 0 });
+  const [croppedBaseImage, setCroppedBaseImage] = useState(null);
+  
   const previewRef = useRef(null);
   const imageRef = useRef(null);
   const drawingCanvasRef = useRef(null);
@@ -726,6 +733,145 @@ function App() {
     setRotationCenter({ x: 0, y: 0 });
   };
 
+  // トリミング機能
+  const handleCropMouseDown = (e) => {
+    if (!trimmingMode || !imageRef.current || !previewRef.current) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const rect = previewRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    setIsCropping(true);
+    setCropStartPos({ x, y });
+    setCropArea({ x, y, width: 0, height: 0 });
+  };
+
+  const handleCropMouseMove = (e) => {
+    if (!trimmingMode || !isCropping || !previewRef.current) return;
+    
+    // previewRef基準の座標を使用
+    const rect = previewRef.current.getBoundingClientRect();
+    const currentX = e.clientX - rect.left;
+    const currentY = e.clientY - rect.top;
+    
+    const width = currentX - cropStartPos.x;
+    const height = currentY - cropStartPos.y;
+    
+    const newCropArea = {
+      x: width > 0 ? cropStartPos.x : currentX,
+      y: height > 0 ? cropStartPos.y : currentY,
+      width: Math.abs(width),
+      height: Math.abs(height)
+    };
+    
+    // ログを間引く（10px以上変化した時のみ）
+    if (Math.abs(newCropArea.width - cropArea.width) > 10 || Math.abs(newCropArea.height - cropArea.height) > 10) {
+      console.log('Crop area updated:', newCropArea);
+    }
+    setCropArea(newCropArea);
+  };
+
+  const handleCropMouseUp = () => {
+    if (!trimmingMode) return;
+    setIsCropping(false);
+  };
+
+  const confirmCrop = async () => {
+    // トリミング範囲が有効かチェック
+    if (cropArea.width < 10 || cropArea.height < 10) {
+      alert('トリミング範囲が小さすぎます。もう少し大きな範囲を選択してください。');
+      return;
+    }
+    
+    try {
+      const displayImg = imageRef.current;
+      
+      // 画像が存在し、完全に読み込まれているかチェック
+      if (!displayImg || !displayImg.complete || displayImg.naturalWidth === 0) {
+        alert('画像が読み込まれていません。しばらく待ってから再試行してください。');
+        return;
+      }
+      
+      // previewRefとimageRefの境界の差を計算
+      const previewRect = previewRef.current.getBoundingClientRect();
+      const imageRect = displayImg.getBoundingClientRect();
+      
+      // previewRef基準の座標をimageRef基準に変換
+      const offsetX = imageRect.left - previewRect.left;
+      const offsetY = imageRect.top - previewRect.top;
+      
+      // 画像領域内の座標に変換
+      const imageRelativeX = cropArea.x - offsetX;
+      const imageRelativeY = cropArea.y - offsetY;
+      
+      // スケール計算
+      const scaleX = displayImg.naturalWidth / displayImg.clientWidth;
+      const scaleY = displayImg.naturalHeight / displayImg.clientHeight;
+      
+      // 実際の画像座標に変換
+      const actualCropX = Math.max(0, Math.round(imageRelativeX * scaleX));
+      const actualCropY = Math.max(0, Math.round(imageRelativeY * scaleY));
+      const actualCropWidth = Math.min(displayImg.naturalWidth - actualCropX, Math.round(cropArea.width * scaleX));
+      const actualCropHeight = Math.min(displayImg.naturalHeight - actualCropY, Math.round(cropArea.height * scaleY));
+      
+      // 有効な範囲かチェック
+      if (actualCropWidth <= 0 || actualCropHeight <= 0) {
+        alert('無効なトリミング範囲です。');
+        return;
+      }
+      
+      // サーバーにトリミングリクエストを送信
+      const formData = new FormData();
+      
+      // ベース画像をFormDataに追加
+      if (baseImage) {
+        formData.append('base_image', baseImage);
+      }
+      
+      // トリミング範囲をFormDataに追加
+      formData.append('crop_x', actualCropX.toString());
+      formData.append('crop_y', actualCropY.toString());
+      formData.append('crop_width', actualCropWidth.toString());
+      formData.append('crop_height', actualCropHeight.toString());
+      
+      const response = await fetch(`${getApiBaseUrl()}/crop`, {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`サーバーエラー: ${response.status} - ${errorText}`);
+      }
+      
+      // レスポンスをBlobとして取得
+      const blob = await response.blob();
+      
+      // FileオブジェクトとしてベースImageに設定
+      const file = new File([blob], 'cropped-image.jpg', { type: 'image/jpeg' });
+      
+      setCroppedBaseImage(file);
+      setBaseImage(file);
+      
+      // トリミングモードを終了
+      setTrimmingMode(false);
+      setCropArea({ x: 0, y: 0, width: 0, height: 0 });
+      setIsCropping(false);
+      
+    } catch (error) {
+      alert(`トリミング中にエラーが発生しました: ${error.message}`);
+    }
+  };
+
+  const cancelCrop = () => {
+    setTrimmingMode(false);
+    setCropArea({ x: 0, y: 0, width: 0, height: 0 });
+    setIsCropping(false);
+  };
+
   const clearDrawing = () => {
     if (!drawingCanvasRef.current) return;
     
@@ -1081,7 +1227,8 @@ function App() {
     if (baseImage) {
       return URL.createObjectURL(baseImage);
     }
-    return `${getApiBaseUrl()}/default-image`;
+    // デフォルト画像は静的ファイルとして提供（CORS問題を回避）
+    return `${getApiBaseUrl()}/static/hirsakam.jpg`;
   };
 
   const generateIcon = async () => {
@@ -1463,6 +1610,24 @@ function App() {
                   デフォルト: hirsakam.jpg
                 </div>
               )}
+              
+              {/* トリミングボタン */}
+              <button
+                onClick={() => {
+                  console.log('Entering trimming mode', {
+                    baseImage: baseImage,
+                    baseImageUrl: getBaseImageUrl(),
+                    trimmingMode: trimmingMode,
+                    previewMode: previewMode
+                  });
+                  setTrimmingMode(true);
+                }}
+                className="preview-button-single"
+                style={{ marginTop: '10px' }}
+                disabled={trimmingMode || previewMode}
+              >
+                ✂️ ベース画像をトリミング
+              </button>
             </div>
 
             <div className="form-group">
@@ -1809,8 +1974,106 @@ function App() {
           </div>
 
           <div className="result-section">
-            <h2>{previewMode ? 'プレビュー（ドラッグで位置・サイズ調整 / 描画モード）' : '生成結果'}</h2>
-            {previewMode ? (
+            <h2>
+              {trimmingMode ? 'トリミングモード（範囲を選択してください）' : 
+               previewMode ? 'プレビュー（ドラッグで位置・サイズ調整 / 描画モード）' : 
+               '生成結果'}
+            </h2>
+            {trimmingMode ? (
+              <div className="trimming-container">
+                <div 
+                  className="preview-canvas"
+                  ref={previewRef}
+                  onMouseDown={handleCropMouseDown}
+                  onMouseMove={handleCropMouseMove}
+                  onMouseUp={handleCropMouseUp}
+                  style={{
+                    cursor: 'crosshair',
+                    userSelect: 'none',
+                    minHeight: '300px',
+                    border: '2px dashed #ccc',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    position: 'relative',
+                    backgroundColor: 'rgba(248, 249, 250, 0.5)'
+                  }}
+                >
+                  <img 
+                    ref={imageRef}
+                    src={getBaseImageUrl()} 
+                    alt="ベース画像"
+                    className="base-preview-image"
+                    draggable={false}
+                    onLoad={handleImageLoad}
+                    onError={(e) => {
+                      // デフォルト画像でCORSエラーの場合、crossOriginを削除して再試行
+                      if (!baseImage && e.target.crossOrigin) {
+                        e.target.crossOrigin = '';
+                        setTimeout(() => {
+                          e.target.src = e.target.src + '?retry=' + Date.now();
+                        }, 100);
+                      }
+                    }}
+                    // デフォルト画像では最初はcrossOriginを設定しない
+                    {...(!baseImage ? {} : { crossOrigin: undefined })}
+                    key={`trimming-${baseImage ? baseImage.name + baseImage.lastModified : 'default'}`}
+                    style={{
+                      pointerEvents: 'none', // イベントを親コンテナに委譲
+                      maxWidth: '100%',
+                      maxHeight: '400px',
+                      objectFit: 'contain'
+                    }}
+                  />
+                  
+                  {/* トリミング用オーバーレイ */}
+                  {(cropArea.width > 1 && cropArea.height > 1) && imageRef.current && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        // 画像の境界に合わせて配置
+                        left: cropArea.x,
+                        top: cropArea.y,
+                        width: cropArea.width,
+                        height: cropArea.height,
+                        border: '2px solid #007bff',
+                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                        pointerEvents: 'none',
+                        zIndex: 2000
+                      }}
+                    >
+                    </div>
+                  )}
+                </div>
+                
+                <div className="preview-controls">
+                  <button 
+                    onClick={() => {
+                      if (cropArea.width < 1 || cropArea.height < 1) {
+                        alert('範囲が小さすぎます');
+                        return;
+                      }
+                      confirmCrop();
+                    }}
+                    className="generate-from-preview-button"
+                    title="選択した範囲でトリミングを確定"
+                    style={{
+                      backgroundColor: cropArea.width < 1 || cropArea.height < 1 ? '#ccc' : '#007bff',
+                      cursor: cropArea.width < 1 || cropArea.height < 1 ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    ✓ トリミング確定 ({Math.round(cropArea.width)}×{Math.round(cropArea.height)})
+                  </button>
+                  <button 
+                    onClick={cancelCrop}
+                    className="back-button"
+                    title="トリミングをキャンセル"
+                  >
+                    ✗ キャンセル
+                  </button>
+                </div>
+              </div>
+            ) : previewMode ? (
               <>
                 <div className="preview-container">
                 <div 
@@ -1822,7 +2085,6 @@ function App() {
                     
                     // 背景をクリックした時（他の要素で stopPropagation されていない場合）
                     if (e.target === e.currentTarget || e.target.classList.contains('base-preview-image')) {
-                      console.log('Background clicked, clearing overlay selection');
                       setSelectedOverlayIndex(-1);
                     }
                   }}
