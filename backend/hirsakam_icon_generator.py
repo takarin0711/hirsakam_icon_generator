@@ -701,6 +701,48 @@ class HirsakamGenerator:
             print(f"ベース画像コピーエラー: {e}")
             raise
     
+    def crop_image(self, input_path, crop_x, crop_y, crop_width, crop_height, output_path=None):
+        """画像をトリミングする"""
+        try:
+            # 画像を読み込み
+            image = Image.open(input_path)
+            
+            # 出力パスが指定されていない場合は元のパスを使用
+            if output_path is None:
+                output_path = input_path
+            
+            # トリミング範囲を検証
+            if crop_x < 0:
+                crop_x = 0
+            if crop_y < 0:
+                crop_y = 0
+            if crop_x + crop_width > image.width:
+                crop_width = image.width - crop_x
+            if crop_y + crop_height > image.height:
+                crop_height = image.height - crop_y
+            
+            # トリミング範囲が有効かチェック
+            if crop_width <= 0 or crop_height <= 0:
+                print("Warning: Invalid crop dimensions, returning original image")
+                return input_path
+            
+            # トリミング実行
+            crop_box = (crop_x, crop_y, crop_x + crop_width, crop_y + crop_height)
+            cropped_image = image.crop(crop_box)
+            
+            # RGBモードで保存（透明性を含まない）
+            if cropped_image.mode != 'RGB':
+                cropped_image = cropped_image.convert('RGB')
+            
+            cropped_image.save(output_path, "JPEG", quality=95)
+            print(f"画像をトリミングしました: {output_path} (範囲: {crop_x}, {crop_y}, {crop_width}, {crop_height})")
+            return output_path
+            
+        except Exception as e:
+            print(f"トリミングエラー: {e}")
+            # エラーの場合は元の画像をそのまま返す
+            return input_path
+    
     def add_text_to_image(self, input_path, text, position, color=(255, 255, 255), font_size=48, rotation=0, output_path=None):
         """既存の画像にテキストを追加する"""
         try:

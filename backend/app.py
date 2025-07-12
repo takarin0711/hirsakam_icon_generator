@@ -45,14 +45,32 @@ app.add_middleware(
 )
 
 # 静的ファイルの提供（親ディレクトリを参照）
+from starlette.middleware.base import BaseHTTPMiddleware
+
+class CORSStaticFilesMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith('/static/'):
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            response.headers["Access-Control-Allow-Methods"] = "GET"
+            response.headers["Access-Control-Allow-Headers"] = "*"
+        return response
+
+app.add_middleware(CORSStaticFilesMiddleware)
 app.mount("/static", StaticFiles(directory=".."), name="static")
 
 @app.get("/default-image")
 async def get_default_image():
     """デフォルトのhirsakam.jpg画像を提供"""
+    from fastapi import Response
     hirsakam_path = os.path.join("..", "hirsakam.jpg")
     if os.path.exists(hirsakam_path):
-        return FileResponse(hirsakam_path, media_type="image/jpeg")
+        # CORSヘッダーを明示的に設定
+        response = FileResponse(hirsakam_path, media_type="image/jpeg")
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        return response
     else:
         raise HTTPException(status_code=404, detail="デフォルト画像が見つかりません")
 
@@ -259,11 +277,16 @@ async def download_file(filename: str):
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="ファイルが見つかりません")
     
-    return FileResponse(
+    # CORSヘッダーを明示的に設定
+    response = FileResponse(
         path=file_path,
         filename=filename,
         media_type='image/jpeg'
     )
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
 
 @app.get("/gallery")
 async def get_gallery(sort: str = "desc", offset: int = 0, limit: int = 20):
@@ -333,6 +356,99 @@ async def get_gallery(sort: str = "desc", offset: int = 0, limit: int = 20):
         }
         
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/crop")
+async def crop_image(
+    base_image: Optional[UploadFile] = File(None),
+    crop_x: int = Form(...),
+    crop_y: int = Form(...),
+    crop_width: int = Form(...),
+    crop_height: int = Form(...)
+):
+    """
+    画像をトリミングする
+    """
+    try:
+        print(f"Crop request: x={crop_x}, y={crop_y}, width={crop_width}, height={crop_height}")
+        
+        # ベース画像のパス
+        base_image_path = os.path.join("..", "hirsakam.jpg")
+        
+        # カスタム画像がアップロードされた場合
+        if base_image:
+            # 一意のファイル名を生成
+            file_id = str(uuid.uuid4())
+            file_extension = os.path.splitext(base_image.filename)[1]
+            temp_path = os.path.join(UPLOAD_DIR, f"{file_id}{file_extension}")
+            
+            # ファイルを保存
+            with open(temp_path, "wb") as buffer:
+                shutil.copyfileobj(base_image.file, buffer)
+            
+            base_image_path = temp_path
+        
+        # ジェネレーターを初期化
+        generator = HirsakamGenerator(base_image_path)
+        
+        # 出力ファイル名を生成
+        output_id = str(uuid.uuid4())
+        output_path = os.path.join(UPLOAD_DIR, f"cropped_{output_id}.jpg")
+        
+        # トリミング実行
+        result_path = generator.crop_image(
+            base_image_path, 
+            crop_x, crop_y, crop_width, crop_height, 
+            output_path
+        )
+        
+        print(f"Crop completed: {result_path}")
+        
+        # 一時ファイルを削除（アップロードされたファイルのみ）
+        hirsakam_default = os.path.join("..", "hirsakam.jpg")
+        if base_image and base_image_path != hirsakam_default and os.path.exists(base_image_path):
+            os.remove(base_image_path)
+        
+        # トリミングされた画像を返す
+        from starlette.background import BackgroundTask
+        
+        def cleanup_file():
+            # レスポンス送信後にファイルを削除
+            if os.path.exists(result_path):
+                try:
+                    os.remove(result_path)
+                    print(f"Cleaned up temporary crop file: {result_path}")
+                except Exception as e:
+                    print(f"Failed to cleanup crop file: {e}")
+        
+        response = FileResponse(
+            path=result_path,
+            filename=f"cropped_{output_id}.jpg",
+            media_type='image/jpeg',
+            background=BackgroundTask(cleanup_file)
+        )
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "POST"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        
+        return response
+        
+    except Exception as e:
+        print(f"Crop error: {e}")
+        # エラー時に一時ファイルを削除
+        hirsakam_default = os.path.join("..", "hirsakam.jpg")
+        if (base_image and 'base_image_path' in locals() and 
+            base_image_path != hirsakam_default and os.path.exists(base_image_path)):
+            os.remove(base_image_path)
+        
+        # トリミング結果ファイルも削除（存在する場合）
+        if 'result_path' in locals() and os.path.exists(result_path):
+            try:
+                os.remove(result_path)
+                print(f"Cleaned up failed crop file: {result_path}")
+            except Exception as cleanup_error:
+                print(f"Failed to cleanup failed crop file: {cleanup_error}")
+        
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
