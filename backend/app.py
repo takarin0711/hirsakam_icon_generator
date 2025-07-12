@@ -451,6 +451,118 @@ async def crop_image(
         
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/gacha")
+async def gacha():
+    """
+    ガチャを引く
+    """
+    try:
+        import random
+        import glob
+        
+        # ガチャ確率設定
+        probabilities = {
+            'N': 0.50,    # 50%
+            'R': 0.30,    # 30%
+            'SR': 0.15,   # 15%
+            'SSR': 0.05   # 5%
+        }
+        
+        # レアリティを抽選
+        rand = random.random()
+        cumulative = 0
+        selected_rarity = None
+        
+        for rarity, prob in probabilities.items():
+            cumulative += prob
+            if rand <= cumulative:
+                selected_rarity = rarity
+                break
+        
+        # 画像ディレクトリのマッピング
+        rarity_dirs = {
+            'N': 'normal',
+            'R': 'rare', 
+            'SR': 'super_rare',
+            'SSR': 'special_super_rare'
+        }
+        
+        # 対応するディレクトリから画像を選択
+        gacha_dir = os.path.join("..", "hirsakam_gacha_image", rarity_dirs[selected_rarity])
+        
+        if not os.path.exists(gacha_dir):
+            raise HTTPException(status_code=500, detail=f"ガチャ画像ディレクトリが見つかりません: {gacha_dir}")
+        
+        # ディレクトリ内の画像ファイルを取得
+        image_files = []
+        for ext in ['*.jpg', '*.jpeg', '*.png', '*.gif']:
+            image_files.extend(glob.glob(os.path.join(gacha_dir, ext)))
+        
+        if not image_files:
+            raise HTTPException(status_code=500, detail=f"ガチャ画像が見つかりません: {gacha_dir}")
+        
+        # ランダムに画像を選択
+        selected_image = random.choice(image_files)
+        image_filename = os.path.basename(selected_image)
+        
+        return {
+            "rarity": selected_rarity,
+            "image_url": f"/gacha-image/{rarity_dirs[selected_rarity]}/{image_filename}",
+            "filename": image_filename
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/gacha-image/{rarity}/{filename}")
+async def get_gacha_image(rarity: str, filename: str):
+    """
+    ガチャ画像を提供
+    """
+    try:
+        # セキュリティチェック: パストラバーサル攻撃を防ぐ
+        if '..' in rarity or '..' in filename or '/' in rarity or '\\' in rarity:
+            raise HTTPException(status_code=400, detail="Invalid path")
+        
+        rarity_dirs = {
+            'normal': 'normal',
+            'rare': 'rare', 
+            'super_rare': 'super_rare',
+            'special_super_rare': 'special_super_rare'
+        }
+        
+        if rarity not in rarity_dirs:
+            raise HTTPException(status_code=400, detail="Invalid rarity")
+        
+        image_path = os.path.join("..", "hirsakam_gacha_image", rarity_dirs[rarity], filename)
+        
+        if not os.path.exists(image_path):
+            raise HTTPException(status_code=404, detail="ガチャ画像が見つかりません")
+        
+        # ファイル拡張子から適切なメディアタイプを決定
+        ext = os.path.splitext(filename)[1].lower()
+        media_type_map = {
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg', 
+            '.png': 'image/png',
+            '.gif': 'image/gif'
+        }
+        media_type = media_type_map.get(ext, 'application/octet-stream')
+        
+        response = FileResponse(
+            path=image_path,
+            filename=filename,
+            media_type=media_type
+        )
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        
+        return response
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     # ファイルアップロードサイズ制限を5MBに設定
     server_url = os.getenv("SERVER_URL", "http://localhost")
