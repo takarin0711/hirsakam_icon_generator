@@ -1817,13 +1817,13 @@ function App() {
               <h3>テキスト設定</h3>
               <div className="form-group">
                 <label>テキスト:</label>
-                <input
-                  type="text"
+                <textarea
                   name="text"
                   value={formData.text}
                   onChange={handleInputChange}
                   placeholder="カスタムテキストを入力"
                   className="text-input"
+                  rows="3"
                 />
               </div>
 
@@ -2225,7 +2225,7 @@ function App() {
                               }}
                             >
                               {formData.text.split('\n').map((line, index) => (
-                                <div key={index} style={{ margin: 0, padding: 0, whiteSpace: 'nowrap' }}>
+                                <div key={index} style={{ margin: 0, padding: 0, whiteSpace: 'pre' }}>
                                   {line || '\u00A0'}
                                 </div>
                               ))}
@@ -2274,7 +2274,7 @@ function App() {
                           }}
                         >
                           {formData.text.split('\n').map((line, index) => (
-                            <div key={index} style={{ margin: 0, padding: 0, whiteSpace: 'nowrap' }}>
+                            <div key={index} style={{ margin: 0, padding: 0, whiteSpace: 'pre' }}>
                               {line || '\u00A0'}
                             </div>
                           ))}
