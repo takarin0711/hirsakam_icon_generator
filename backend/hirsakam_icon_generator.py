@@ -262,7 +262,7 @@ class HirsakamGenerator:
         return image
     
     def add_text_to_image(self, image, text, position, color=(255, 255, 255), font_size=48, is_face_overlay=False, is_emoji=False):
-        """画像にテキストを追加する"""
+        """画像にテキストを追加する（改行対応）"""
         # 絵文字の場合は専用の処理
         if is_emoji:
             return self.add_emoji_to_image(image, text, position, font_size)
@@ -270,15 +270,31 @@ class HirsakamGenerator:
         draw = ImageDraw.Draw(image)
         font = self.get_font(font_size, is_emoji, text=text)
         
-        if is_face_overlay:
+        # 改行文字で分割
+        lines = text.replace('\\n', '\n').split('\n')
+        
+        # 行間の計算
+        line_height = font_size * 1.2  # 行間を20%追加
+        
+        # 全体の高さを計算（背景用）
+        total_height = len(lines) * line_height
+        
+        # 各行の幅を計算（背景の幅決定用）
+        max_width = 0
+        for line in lines:
+            if line.strip():  # 空行でない場合のみ
+                bbox = draw.textbbox((0, 0), line, font=font)
+                line_width = bbox[2] - bbox[0]
+                max_width = max(max_width, line_width)
+        
+        if is_face_overlay and max_width > 0:
             # 顔に被せる場合は背景を半透明にする
-            text_bbox = draw.textbbox(position, text, font=font)
             padding = 10
             bg_bbox = (
-                max(0, text_bbox[0] - padding),
-                max(0, text_bbox[1] - padding),
-                min(image.width, text_bbox[2] + padding),
-                min(image.height, text_bbox[3] + padding)
+                max(0, position[0] - padding),
+                max(0, position[1] - padding),
+                min(image.width, position[0] + max_width + padding),
+                min(image.height, position[1] + total_height + padding)
             )
             
             # 半透明の背景を描画
@@ -294,17 +310,24 @@ class HirsakamGenerator:
             image = Image.alpha_composite(image, overlay)
             draw = ImageDraw.Draw(image)
         
-        # テキストの境界線を描画（ASCII文字のみ）
-        if not any(ord(char) > 127 for char in text):
-            x, y = position
-            outline_width = 2
-            for dx in range(-outline_width, outline_width + 1):
-                for dy in range(-outline_width, outline_width + 1):
-                    if dx != 0 or dy != 0:
-                        draw.text((x + dx, y + dy), text, font=font, fill=(0, 0, 0))
-        
-        # メインテキストを描画
-        draw.text(position, text, font=font, fill=color)
+        # 各行を描画
+        x, y = position
+        for i, line in enumerate(lines):
+            if not line.strip():  # 空行の場合はスキップ
+                continue
+                
+            current_y = y + (i * line_height)
+            
+            # テキストの境界線を描画（ASCII文字のみ）
+            if not any(ord(char) > 127 for char in line):
+                outline_width = 2
+                for dx in range(-outline_width, outline_width + 1):
+                    for dy in range(-outline_width, outline_width + 1):
+                        if dx != 0 or dy != 0:
+                            draw.text((x + dx, current_y + dy), line, font=font, fill=(0, 0, 0))
+            
+            # メインテキストを描画
+            draw.text((x, current_y), line, font=font, fill=color)
         
         return image
     
