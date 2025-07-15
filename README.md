@@ -155,11 +155,10 @@ cd frontend && REACT_APP_SERVER_URL="$SERVER_URL" npm start
    - **特殊エフェクト**: レアリティごとの色分けとアニメーション
    - **GIF対応**: SSRアイテムはアニメーションGIFで特別演出
    - **動的拡張**: 新しい画像を追加するだけで自動的にガチャ対象に追加
-
-### コマンドライン版
-- 高度な絵文字処理（Twitter Twemojiから高品質画像取得）
-- フォント調整とテキスト描画
-- バッチ処理に適している
+12. **改行対応テキスト**: 複数行テキストをサポート
+   - **テキストエリア**: 複数行入力可能なテキストエリア
+   - **改行保持**: Enterキーでの改行が画像に正しく反映
+   - **プレビュー連動**: 改行がプレビューと生成画像で一致
 
 ## 🛠️ セットアップ
 
@@ -266,82 +265,6 @@ cd frontend && npm start
    - SSRのGIF画像は自動でアニメーション再生
 11. 生成された画像をダウンロード
 
-### コマンドライン版
-
-#### 基本的な使い方
-```bash
-cd backend
-source ../venv/bin/activate  # 仮想環境をアクティベート
-```
-
-#### 絵文字を使用
-```bash
-# 基本的な絵文字コラ画像を生成
-python3 hirsakam_icon_generator.py --emoji 😍
-
-# 大きな絵文字で猫の顔の中心に配置（デフォルト位置）
-python3 hirsakam_icon_generator.py --emoji 😍 --emoji-size 250
-
-# 様々な絵文字を試す（デフォルトで猫の顔の中心に配置）
-python3 hirsakam_icon_generator.py --emoji 😂 --emoji-size 200
-python3 hirsakam_icon_generator.py --emoji 😭 --emoji-size 220
-python3 hirsakam_icon_generator.py --emoji 😎 --emoji-size 250
-```
-
-#### カスタムテキストを使用
-```bash
-# 任意のテキストでコラ画像を生成
-python3 hirsakam_icon_generator.py --text "おはよう"
-
-# テキストの位置を指定
-python3 hirsakam_icon_generator.py --text "こんにちは" --x 100 --y 80
-
-# フォントサイズを変更
-python3 hirsakam_icon_generator.py --text "こんばんは" --size 60
-```
-
-#### その他のオプション
-```bash
-# 出力ファイル名を指定  
-python3 hirsakam_icon_generator.py --emoji 😍 --emoji-size 164 --output my_emoji.jpg
-
-# ベース画像を変更
-python3 hirsakam_icon_generator.py --base another_image.jpg --emoji 😊
-```
-
-## 📊 よく使われる絵文字とサイズの例
-
-| 絵文字 | 推奨コマンド | 説明 |
-|-------|-------------|------|
-| 😍 | `python3 hirsakam_icon_generator.py --emoji 😍 --emoji-size 250` | ハート目の猫 |
-| 😂 | `python3 hirsakam_icon_generator.py --emoji 😂 --emoji-size 220` | 大笑いの猫 |
-| 😭 | `python3 hirsakam_icon_generator.py --emoji 😭 --emoji-size 230` | 大泣きの猫 |
-| 😎 | `python3 hirsakam_icon_generator.py --emoji 😎 --emoji-size 250` | クールな猫 |
-| 😴 | `python3 hirsakam_icon_generator.py --emoji 😴 --emoji-size 200` | 眠い猫 |
-| 🤔 | `python3 hirsakam_icon_generator.py --emoji 🤔 --emoji-size 220` | 考える猫 |
-| 😏 | `python3 hirsakam_icon_generator.py --emoji 😏 --emoji-size 240` | ニヤリとする猫 |
-
-## 🔧 コマンドライン引数
-
-| 引数 | 説明 | デフォルト値 |
-|------|------|-------------|
-| `--base` | ベース画像のパス | `hirsakam.jpg` |
-| `--emoji` | 絵文字（例: 😍） | - |
-| `--text` | カスタムテキスト | - |
-| `--output` | 出力ファイル名 | 自動生成 |
-| `--x` | X座標 | 190 (猫の顔の中心) |
-| `--y` | Y座標 | 115 (猫の顔の中心) |
-| `--size` | フォントサイズ | 48 |
-| `--emoji-size` | 絵文字のサイズ（ピクセル） | 250 |
-
-## 📁 出力
-
-生成された画像は `output/` ディレクトリに保存されます。
-
-- **絵文字使用時**: `output/image_emoji_{unicodeコード}.jpg`
-- **カスタムテキスト使用時**: `output/image_custom.jpg`
-- **`--output` 指定時**: 指定されたパス
-
 ## 💡 ファイル構成の説明
 
 ### `app.py` vs `hirsakam_icon_generator.py`
@@ -350,7 +273,6 @@ python3 hirsakam_icon_generator.py --base another_image.jpg --emoji 😊
   - Pillowを使った画像処理
   - 絵文字・テキストの描画
   - 描画オーバーレイの合成
-  - コマンドライン単体実行可能
   
 - **`app.py`**: Web API サーバー
   - FastAPIを使ったWebサーバー
@@ -493,23 +415,6 @@ hirsakam_gacha_image/
 - SSRにはアニメーションGIFを配置することを推奨
 - ファイル名は自由（日本語可能）
 - 各フォルダに最低1枚の画像が必要
-
-## 🎨 カスタマイズ
-
-### 猫の顔の中心位置の調整
-`backend/hirsakam_icon_generator.py` の `face_center` 変数を編集：
-
-```python
-# 猫の顔の中心位置（画像を精密に測定）
-self.face_center = (190, 115)
-```
-
-### 絵文字のデフォルト位置の変更
-`generate_with_emoji` メソッドのデフォルト値を変更：
-
-```python
-def generate_with_emoji(self, emoji_char, position=(330, 180), size=250, output_path=None):
-```
 
 ## 📄 ライセンス
 
