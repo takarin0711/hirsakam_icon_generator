@@ -3,7 +3,6 @@
 Hirsakam コラ画像ジェネレーター
 """
 
-import argparse
 from PIL import Image, ImageDraw, ImageFont
 import os
 import sys
@@ -508,51 +507,7 @@ class HirsakamGenerator:
             return self.add_emoji_to_image(image, emoji_char, position, 96)
     
     
-    def generate_with_emoji(self, emoji_char, position=(260, 143), size=164, output_path=None):
-        """絵文字を使用してコラ画像を生成"""
-        image = self.load_base_image()
-        
-        # 絵文字画像を追加
-        image = self.add_emoji_image_to_image(image, emoji_char, position, size)
-        
-        # 出力パスを決定
-        if output_path is None:
-            os.makedirs("output", exist_ok=True)
-            output_path = f"output/image_emoji_{ord(emoji_char):x}.jpg"
-        
-        # 画像を保存（RGBAの場合はRGBに変換、元の背景を保持）
-        if image.mode == 'RGBA':
-            # 元のベース画像の背景を保持してRGBに変換
-            base_image = self.load_base_image()
-            rgb_image = base_image.convert('RGB')
-            rgb_image.paste(image, mask=image.split()[-1])
-            image = rgb_image
-        
-        image.save(output_path, "JPEG", quality=95)
-        return output_path
     
-    def generate_custom(self, text, position=(50, 50), color=(255, 255, 255), font_size=48, output_path=None):
-        """カスタムテキストでコラ画像を生成"""
-        image = self.load_base_image()
-        
-        # テキストを追加
-        image = self.add_text_to_image(image, text, position, color, font_size)
-        
-        # 出力パスを決定
-        if output_path is None:
-            os.makedirs("output", exist_ok=True)
-            output_path = f"output/image_custom.jpg"
-        
-        # 画像を保存（RGBAの場合はRGBに変換、元の背景を保持）
-        if image.mode == 'RGBA':
-            # 元のベース画像の背景を保持してRGBに変換
-            base_image = self.load_base_image()
-            rgb_image = base_image.convert('RGB')
-            rgb_image.paste(image, mask=image.split()[-1])
-            image = rgb_image
-        
-        image.save(output_path, "JPEG", quality=95)
-        return output_path
     
     def add_drawing_overlay(self, base_image_path, drawing_image_path, output_path=None):
         """描画オーバーレイを既存の画像に合成"""
@@ -930,48 +885,3 @@ class HirsakamGenerator:
             print(f"絵文字合成エラー: {e}")
             return image
 
-def main():
-    parser = argparse.ArgumentParser(description="Hirsakam コラ画像ジェネレーター")
-    parser.add_argument("--base", default="hirsakam.jpg", help="ベース画像のパス")
-    parser.add_argument("--text", help="カスタムテキスト")
-    parser.add_argument("--emoji", help="絵文字（例: 😍）")
-    parser.add_argument("--output", help="出力ファイル名")
-    parser.add_argument("--x", type=int, default=260, help="テキスト/絵文字のX座標（絵文字のデフォルト: 260）")
-    parser.add_argument("--y", type=int, default=143, help="テキスト/絵文字のY座標（絵文字のデフォルト: 143）")
-    parser.add_argument("--size", type=int, default=48, help="フォントサイズ")
-    parser.add_argument("--emoji-size", type=int, default=164, help="絵文字のサイズ")
-    
-    args = parser.parse_args()
-    
-    generator = HirsakamGenerator(args.base)
-    
-    try:
-        if args.emoji:
-            output_path = generator.generate_with_emoji(
-                args.emoji,
-                (args.x, args.y),
-                args.emoji_size,
-                args.output
-            )
-            print(f"絵文字 '{args.emoji}' で画像を生成しました: {output_path}")
-        elif args.text:
-            output_path = generator.generate_custom(
-                args.text, 
-                (args.x, args.y),
-                font_size=args.size,
-                output_path=args.output
-            )
-            print(f"カスタムテキストで画像を生成しました: {output_path}")
-        else:
-            print("--emoji または --text を指定してください")
-            print("使用方法:")
-            print("  python hirsakam_generator.py --emoji 😍")
-            print("  python hirsakam_generator.py --emoji 😍 --emoji-size 164 --x 260 --y 143")
-            print("  python hirsakam_generator.py --text 'カスタムテキスト'")
-    
-    except Exception as e:
-        print(f"エラー: {e}")
-        sys.exit(1)
-
-if __name__ == "__main__":
-    main()
