@@ -18,10 +18,80 @@ except ImportError:
     print("Warning: rembg library not available. Background removal feature will be disabled.")
 
 class HirsakamGenerator:
+    # 設定定数
+    DEFAULT_FONT_SIZE = 48
+    DEFAULT_EMOJI_SIZE = 164
+    DEFAULT_TEXT_COLOR = (255, 255, 255)
+    DEFAULT_BACKGROUND_COLOR = (0, 0, 0)
+    LINE_HEIGHT_RATIO = 1.2
+    IMAGE_QUALITY = 95
+    OUTLINE_WIDTH = 2
+    TRANSPARENT_ALPHA_THRESHOLD = 128
+    BACKGROUND_ALPHA_THRESHOLD = 32
+    TEXT_CANVAS_PADDING = 100
+    OVERLAY_PADDING = 50
+    UNICODE_RANGES = {
+        'HIRAGANA': (0x3040, 0x309F),
+        'KATAKANA': (0x30A0, 0x30FF),
+        'KANJI': (0x4E00, 0x9FAF),
+        'FULLWIDTH': (0xFF00, 0xFFEF)
+    }
     def __init__(self, base_image_path="hirsakam.jpg"):
         self.base_image_path = base_image_path
         # 猫の顔の中心位置（画像を精密に測定）
         self.face_center = (260, 143)
+        
+        # フォントパス定数
+        self.EMOJI_FONT_PATHS = [
+            "/System/Library/Fonts/Apple Color Emoji.ttc",
+            "/System/Library/Fonts/Supplemental/Apple Color Emoji.ttc",
+            "/Library/Fonts/Apple Color Emoji.ttc",
+            "/System/Library/Fonts/Apple Color Emoji.ttf",
+            "/System/Library/Fonts/Supplemental/Apple Color Emoji.ttf",
+            "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/TTF/NotoColorEmoji.ttf",
+            "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
+        ]
+        
+        self.TEXT_FONT_PATHS = [
+            "/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc",
+            "/System/Library/Fonts/Helvetica.ttc",
+            "/System/Library/Fonts/Arial.ttf",
+            "/usr/share/fonts/truetype/noto-cjk/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/TTF/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/takao-gothic/TakaoPGothic.ttf",
+            "/usr/share/fonts/takao/TakaoPGothic.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/TTF/DejaVuSans.ttf",
+            "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/TTF/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf",
+            "/usr/share/fonts/TTF/arial.ttf",
+            "/usr/share/fonts/corefonts/arial.ttf"
+        ]
+        
+        self.JAPANESE_FONT_PATTERNS = [
+            "**/NotoSansCJK*.ttc",
+            "**/NotoSansCJK*.ttf",
+            "**/NotoSans*CJK*.ttc",
+            "**/NotoSans*CJK*.ttf",
+            "**/Takao*.ttf",
+            "**/VLGothic*.ttf",
+            "**/IPAexGothic*.ttf",
+            "**/IPAGothic*.ttf",
+            "**/ヒラギノ*.ttc"
+        ]
+        
+        self.FONT_SEARCH_DIRS = [
+            "/usr/share/fonts/",
+            "/usr/local/share/fonts/",
+            "/System/Library/Fonts/",
+            os.path.expanduser("~/.fonts/")
+        ]
     
     def load_base_image(self):
         """ベース画像を読み込む"""
@@ -35,32 +105,18 @@ class HirsakamGenerator:
             return False
         for char in text:
             code = ord(char)
-            if (0x3040 <= code <= 0x309F or  # ひらがな
-                0x30A0 <= code <= 0x30FF or  # カタカナ  
-                0x4E00 <= code <= 0x9FAF or  # 漢字
-                0xFF00 <= code <= 0xFFEF):   # 全角文字
-                return True
+            for range_name, (start, end) in self.UNICODE_RANGES.items():
+                if start <= code <= end:
+                    return True
         return False
 
-    def get_font(self, font_size=48, is_emoji=False, text=""):
+    def get_font(self, font_size=None, is_emoji=False, text=""):
         """フォントを取得する"""
-        if is_emoji:
-            # 絵文字フォントの候補（macOS + Linux）
-            emoji_fonts = [
-                # macOS
-                "/System/Library/Fonts/Apple Color Emoji.ttc",
-                "/System/Library/Fonts/Supplemental/Apple Color Emoji.ttc",
-                "/Library/Fonts/Apple Color Emoji.ttc",
-                "/System/Library/Fonts/Apple Color Emoji.ttf",
-                "/System/Library/Fonts/Supplemental/Apple Color Emoji.ttf",
-                # Linux
-                "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                "/usr/share/fonts/TTF/NotoColorEmoji.ttf",
-                "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
-            ]
+        if font_size is None:
+            font_size = self.DEFAULT_FONT_SIZE
             
-            for font_path in emoji_fonts:
+        if is_emoji:
+            for font_path in self.EMOJI_FONT_PATHS:
                 try:
                     if os.path.exists(font_path):
                         print(f"絵文字フォント見つかりました: {font_path}")
@@ -78,32 +134,7 @@ class HirsakamGenerator:
                 return japanese_font
             print("Warning: 日本語フォントが見つかりません。汎用フォントを使用します。")
         
-        # テキストフォントの候補（macOS + Linux）
-        text_fonts = [
-            # macOS
-            "/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc",
-            "/System/Library/Fonts/Helvetica.ttc",
-            "/System/Library/Fonts/Arial.ttf",
-            # 日本語フォント (Linux) - 優先度を上げる
-            "/usr/share/fonts/truetype/noto-cjk/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/TTF/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/truetype/takao-gothic/TakaoPGothic.ttf",
-            "/usr/share/fonts/takao/TakaoPGothic.ttf",
-            # Linux (CentOS/RHEL/Rocky Linux) - 日本語非対応フォント
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/TTF/DejaVuSans.ttf",
-            "/usr/share/fonts/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-            "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
-            "/usr/share/fonts/TTF/LiberationSans-Regular.ttf",
-            # 汎用的なLinuxフォント
-            "/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf",
-            "/usr/share/fonts/TTF/arial.ttf",
-            "/usr/share/fonts/corefonts/arial.ttf"
-        ]
-        
-        for font_path in text_fonts:
+        for font_path in self.TEXT_FONT_PATHS:
             try:
                 if os.path.exists(font_path):
                     print(f"テキストフォント見つかりました: {font_path}")
@@ -124,31 +155,11 @@ class HirsakamGenerator:
     
     def _find_japanese_font(self, font_size):
         """日本語対応フォントを優先的に検索"""
-        search_dirs = [
-            "/usr/share/fonts/",
-            "/usr/local/share/fonts/",
-            "/System/Library/Fonts/",
-            os.path.expanduser("~/.fonts/")
-        ]
-        
-        # 日本語フォントのパターン（優先度順）
-        japanese_patterns = [
-            "**/NotoSansCJK*.ttc",
-            "**/NotoSansCJK*.ttf", 
-            "**/NotoSans*CJK*.ttc",
-            "**/NotoSans*CJK*.ttf",
-            "**/Takao*.ttf",
-            "**/VLGothic*.ttf",
-            "**/IPAexGothic*.ttf",
-            "**/IPAGothic*.ttf",
-            "**/ヒラギノ*.ttc"
-        ]
-        
-        for search_dir in search_dirs:
+        for search_dir in self.FONT_SEARCH_DIRS:
             if not os.path.exists(search_dir):
                 continue
                 
-            for pattern in japanese_patterns:
+            for pattern in self.JAPANESE_FONT_PATTERNS:
                 font_path = os.path.join(search_dir, pattern)
                 matches = glob.glob(font_path, recursive=True)
                 
@@ -165,25 +176,22 @@ class HirsakamGenerator:
     def _print_font_diagnostics(self):
         """フォント診断情報を出力"""
         print("=== フォント診断情報 ===")
-        font_dirs = [
-            "/usr/share/fonts",
-            "/usr/local/share/fonts",
-            "/System/Library/Fonts",
-            "~/.fonts"
-        ]
+        font_extensions = ('.ttf', '.ttc', '.otf')
+        max_examples = 3
+        max_files_to_check = 5
         
-        for font_dir in font_dirs:
+        for font_dir in self.FONT_SEARCH_DIRS:
             expanded_dir = os.path.expanduser(font_dir)
             if os.path.exists(expanded_dir):
                 print(f"フォントディレクトリ存在: {expanded_dir}")
                 try:
                     fonts = []
                     for root, dirs, files in os.walk(expanded_dir):
-                        for file in files[:5]:  # 最初の5つだけ表示
-                            if file.lower().endswith(('.ttf', '.ttc', '.otf')):
+                        for file in files[:max_files_to_check]:
+                            if file.lower().endswith(font_extensions):
                                 fonts.append(os.path.join(root, file))
                     if fonts:
-                        print(f"  利用可能フォント例: {fonts[:3]}")
+                        print(f"  利用可能フォント例: {fonts[:max_examples]}")
                     else:
                         print(f"  TTF/TTCファイルが見つかりません")
                 except Exception as e:
@@ -194,13 +202,6 @@ class HirsakamGenerator:
     
     def _find_system_font(self, font_size):
         """システム内のフォントを動的に検索"""
-        search_dirs = [
-            "/usr/share/fonts/",
-            "/usr/local/share/fonts/",
-            "/System/Library/Fonts/",
-            os.path.expanduser("~/.fonts/")
-        ]
-        
         # 日本語対応フォントを最優先にする
         font_patterns = [
             # 日本語フォント（最優先）
@@ -224,7 +225,7 @@ class HirsakamGenerator:
             "**/*.ttc"
         ]
         
-        for search_dir in search_dirs:
+        for search_dir in self.FONT_SEARCH_DIRS:
             if not os.path.exists(search_dir):
                 continue
                 
@@ -260,8 +261,13 @@ class HirsakamGenerator:
         
         return image
     
-    def add_text_to_image(self, image, text, position, color=(255, 255, 255), font_size=48, is_face_overlay=False, is_emoji=False):
-        """画像にテキストを追加する（改行対応）"""
+    def add_text_to_image_legacy(self, image, text, position, color=None, font_size=None, is_face_overlay=False, is_emoji=False):
+        """画像にテキストを追加する（改行対応）- レガシー版"""
+        if color is None:
+            color = self.DEFAULT_TEXT_COLOR
+        if font_size is None:
+            font_size = self.DEFAULT_FONT_SIZE
+            
         # 絵文字の場合は専用の処理
         if is_emoji:
             return self.add_emoji_to_image(image, text, position, font_size)
@@ -273,7 +279,7 @@ class HirsakamGenerator:
         lines = text.replace('\\n', '\n').split('\n')
         
         # 行間の計算
-        line_height = font_size * 1.2  # 行間を20%追加
+        line_height = font_size * self.LINE_HEIGHT_RATIO
         
         # 全体の高さを計算（背景用）
         total_height = len(lines) * line_height
@@ -319,11 +325,10 @@ class HirsakamGenerator:
             
             # テキストの境界線を描画（ASCII文字のみ）
             if not any(ord(char) > 127 for char in line):
-                outline_width = 2
-                for dx in range(-outline_width, outline_width + 1):
-                    for dy in range(-outline_width, outline_width + 1):
+                for dx in range(-self.OUTLINE_WIDTH, self.OUTLINE_WIDTH + 1):
+                    for dy in range(-self.OUTLINE_WIDTH, self.OUTLINE_WIDTH + 1):
                         if dx != 0 or dy != 0:
-                            draw.text((x + dx, current_y + dy), line, font=font, fill=(0, 0, 0))
+                            draw.text((x + dx, current_y + dy), line, font=font, fill=self.DEFAULT_BACKGROUND_COLOR)
             
             # メインテキストを描画
             draw.text((x, current_y), line, font=font, fill=color)
@@ -421,7 +426,7 @@ class HirsakamGenerator:
                     is_background = (
                         a == 0 or  # 完全透明
                         (background_color and (r, g, b) == background_color) or  # 背景色
-                        a < 32  # ほぼ透明
+                        a < self.BACKGROUND_ALPHA_THRESHOLD  # ほぼ透明
                     )
                     
                     if is_background:
@@ -443,7 +448,7 @@ class HirsakamGenerator:
                 for pixel in resized_array:
                     r, g, b, a = pixel
                     # アルファ値が低い場合は完全透明に
-                    if a < 128:
+                    if a < self.TRANSPARENT_ALPHA_THRESHOLD:
                         final_data.append((0, 0, 0, 0))
                     else:
                         # 絵文字部分は完全不透明に
@@ -542,7 +547,7 @@ class HirsakamGenerator:
                 rgb_image.paste(combined, mask=combined.split()[-1])
                 combined = rgb_image
             
-            combined.save(output_path, "JPEG", quality=95)
+            combined.save(output_path, "JPEG", quality=self.IMAGE_QUALITY)
             return output_path
             
         except Exception as e:
@@ -657,7 +662,7 @@ class HirsakamGenerator:
                 rgb_image.paste(base_image, mask=base_image.split()[-1])
                 base_image = rgb_image
             
-            base_image.save(output_path, "JPEG", quality=95)
+            base_image.save(output_path, "JPEG", quality=self.IMAGE_QUALITY)
             return output_path
             
         except Exception as e:
@@ -672,7 +677,7 @@ class HirsakamGenerator:
             # RGBモードで保存（透明性を含まない）
             if base_image.mode != 'RGB':
                 base_image = base_image.convert('RGB')
-            base_image.save(output_path, "JPEG", quality=95)
+            base_image.save(output_path, "JPEG", quality=self.IMAGE_QUALITY)
             print(f"ベース画像をコピーしました: {output_path}")
             return output_path
         except Exception as e:
@@ -712,7 +717,7 @@ class HirsakamGenerator:
             if cropped_image.mode != 'RGB':
                 cropped_image = cropped_image.convert('RGB')
             
-            cropped_image.save(output_path, "JPEG", quality=95)
+            cropped_image.save(output_path, "JPEG", quality=self.IMAGE_QUALITY)
             print(f"画像をトリミングしました: {output_path} (範囲: {crop_x}, {crop_y}, {crop_width}, {crop_height})")
             return output_path
             
@@ -721,8 +726,13 @@ class HirsakamGenerator:
             # エラーの場合は元の画像をそのまま返す
             return input_path
     
-    def add_text_to_image(self, input_path, text, position, color=(255, 255, 255), font_size=48, rotation=0, output_path=None):
+    def add_text_to_image(self, input_path, text, position, color=None, font_size=None, rotation=0, output_path=None):
         """既存の画像にテキストを追加する"""
+        if color is None:
+            color = self.DEFAULT_TEXT_COLOR
+        if font_size is None:
+            font_size = self.DEFAULT_FONT_SIZE
+            
         try:
             # 既存の画像を読み込み
             image = Image.open(input_path)
@@ -737,21 +747,26 @@ class HirsakamGenerator:
             # RGBモードで保存
             if result_image.mode != 'RGB':
                 result_image = result_image.convert('RGB')
-            result_image.save(output_path, "JPEG", quality=95)
+            result_image.save(output_path, "JPEG", quality=self.IMAGE_QUALITY)
             print(f"テキストを追加しました: {text} at {position}")
             return output_path
         except Exception as e:
             print(f"テキスト追加エラー: {e}")
             return input_path
     
-    def add_text_to_image_obj(self, image, text, position, color=(255, 255, 255), font_size=48, rotation=0):
+    def add_text_to_image_obj(self, image, text, position, color=None, font_size=None, rotation=0):
         """画像オブジェクトにテキストを追加する（回転対応・複数行対応）"""
+        if color is None:
+            color = self.DEFAULT_TEXT_COLOR
+        if font_size is None:
+            font_size = self.DEFAULT_FONT_SIZE
+            
         draw = ImageDraw.Draw(image)
         font = self.get_font(font_size, text=text)
         
         # 複数行テキストの処理
         lines = text.split('\n')
-        line_height = font_size * 1.2  # フロントエンドのlineHeight: 1.2と一致させる（浮動小数点で精度向上）
+        line_height = font_size * self.LINE_HEIGHT_RATIO
         
         # 全体のテキストサイズを計算
         total_height = int(len(lines) * line_height)
@@ -777,7 +792,7 @@ class HirsakamGenerator:
         if rotation != 0:
             # 回転する場合はテキストを一時的な透明画像に描画してから回転
             # 複数行を考慮したサイズで透明画像を作成
-            text_img = Image.new('RGBA', (max_width + 100, total_height + 100), (0, 0, 0, 0))
+            text_img = Image.new('RGBA', (max_width + self.TEXT_CANVAS_PADDING, total_height + self.TEXT_CANVAS_PADDING), (0, 0, 0, 0))
             text_draw = ImageDraw.Draw(text_img)
             
             # 各行を描画
@@ -787,8 +802,8 @@ class HirsakamGenerator:
                     bbox = text_draw.textbbox((0, 0), line, font=font)
                     line_width = bbox[2] - bbox[0]
                     # 中央揃えで描画
-                    line_x = 50 + (max_width - line_width) // 2
-                    line_y = int(50 + i * line_height)
+                    line_x = self.OVERLAY_PADDING + (max_width - line_width) // 2
+                    line_y = int(self.OVERLAY_PADDING + i * line_height)
                     text_draw.text((line_x, line_y), line, font=font, fill=color)
                 # 空行の場合は何も描画しないが、スペースは確保される
             
@@ -821,8 +836,11 @@ class HirsakamGenerator:
         
         return image
     
-    def add_emoji_to_image(self, input_path, emoji_char, position, size=164, rotation=0, flip_horizontal=False, output_path=None):
+    def add_emoji_to_image(self, input_path, emoji_char, position, size=None, rotation=0, flip_horizontal=False, output_path=None):
         """既存の画像に絵文字を追加する（透明性を保持）"""
+        if size is None:
+            size = self.DEFAULT_EMOJI_SIZE
+            
         try:
             # 既存の画像を読み込み
             image = Image.open(input_path)
@@ -847,15 +865,18 @@ class HirsakamGenerator:
                 else:
                     result_image = result_image.convert('RGB')
             
-            result_image.save(output_path, "JPEG", quality=95)
+            result_image.save(output_path, "JPEG", quality=self.IMAGE_QUALITY)
             print(f"絵文字を追加しました: {emoji_char} at {position}")
             return output_path
         except Exception as e:
             print(f"絵文字追加エラー: {e}")
             return input_path
     
-    def add_emoji_to_image_obj(self, image, emoji_char, position, size=164, rotation=0, flip_horizontal=False):
+    def add_emoji_to_image_obj(self, image, emoji_char, position, size=None, rotation=0, flip_horizontal=False):
         """画像オブジェクトに絵文字を追加する（回転対応、透明性保持）"""
+        if size is None:
+            size = self.DEFAULT_EMOJI_SIZE
+            
         try:
             # 絵文字画像をダウンロード（透明性処理済み）
             emoji_image = self.download_emoji_image(emoji_char, size)
