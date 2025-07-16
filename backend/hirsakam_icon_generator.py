@@ -115,12 +115,27 @@ class HirsakamGenerator:
         if font_size is None:
             font_size = self.DEFAULT_FONT_SIZE
             
+        # テキストの正規化
+        try:
+            if isinstance(text, bytes):
+                text = text.decode('utf-8')
+            import unicodedata
+            text = unicodedata.normalize('NFC', text)
+        except Exception as e:
+            print(f"フォント選択時のテキスト正規化エラー: {e}")
+            
         if is_emoji:
             for font_path in self.EMOJI_FONT_PATHS:
                 try:
                     if os.path.exists(font_path):
                         print(f"絵文字フォント見つかりました: {font_path}")
-                        return ImageFont.truetype(font_path, font_size)
+                        font = ImageFont.truetype(font_path, font_size)
+                        # フォントのエンコーディングを確認
+                        try:
+                            font.getsize("test")  # テスト文字列でフォントが使用可能か確認
+                        except:
+                            pass
+                        return font
                 except Exception as e:
                     continue
             
@@ -138,7 +153,13 @@ class HirsakamGenerator:
             try:
                 if os.path.exists(font_path):
                     print(f"テキストフォント見つかりました: {font_path}")
-                    return ImageFont.truetype(font_path, font_size)
+                    font = ImageFont.truetype(font_path, font_size)
+                    # フォントのエンコーディングを確認
+                    try:
+                        font.getsize("test")  # テスト文字列でフォントが使用可能か確認
+                    except:
+                        pass
+                    return font
             except Exception as e:
                 continue
         
@@ -275,7 +296,24 @@ class HirsakamGenerator:
         draw = ImageDraw.Draw(image)
         font = self.get_font(font_size, is_emoji, text=text)
         
-        # 改行文字で分割
+        # テキストの正規化とエンコーディング処理
+        try:
+            # UTF-8エンコーディングを明示的に確保
+            if isinstance(text, bytes):
+                text = text.decode('utf-8')
+            
+            # Unicode正規化（NFC形式に統一）
+            import unicodedata
+            text = unicodedata.normalize('NFC', text)
+            
+            # 改行文字の正規化（異なる改行コード形式に対応）
+            text = text.replace('\r\n', '\n').replace('\r', '\n')
+            
+        except Exception as e:
+            print(f"テキスト正規化エラー: {e}")
+            # エラーの場合は元のテキストを使用
+        
+        # 改行文字で分割（エスケープシーケンスも考慮）
         lines = text.replace('\\n', '\n').split('\n')
         
         # 行間の計算
@@ -764,6 +802,23 @@ class HirsakamGenerator:
         draw = ImageDraw.Draw(image)
         font = self.get_font(font_size, text=text)
         
+        # テキストの正規化とエンコーディング処理
+        try:
+            # UTF-8エンコーディングを明示的に確保
+            if isinstance(text, bytes):
+                text = text.decode('utf-8')
+            
+            # Unicode正規化（NFC形式に統一）
+            import unicodedata
+            text = unicodedata.normalize('NFC', text)
+            
+            # 改行文字の正規化（異なる改行コード形式に対応）
+            text = text.replace('\r\n', '\n').replace('\r', '\n')
+            
+        except Exception as e:
+            print(f"テキスト正規化エラー: {e}")
+            # エラーの場合は元のテキストを使用
+        
         # 複数行テキストの処理
         lines = text.split('\n')
         line_height = font_size * self.LINE_HEIGHT_RATIO
@@ -799,12 +854,22 @@ class HirsakamGenerator:
             for i, line in enumerate(lines):
                 # 空行も含めて描画（フロントエンドと一致させる）
                 if line.strip():
-                    bbox = text_draw.textbbox((0, 0), line, font=font)
-                    line_width = bbox[2] - bbox[0]
-                    # 中央揃えで描画
-                    line_x = self.OVERLAY_PADDING + (max_width - line_width) // 2
-                    line_y = int(self.OVERLAY_PADDING + i * line_height)
-                    text_draw.text((line_x, line_y), line, font=font, fill=color)
+                    try:
+                        bbox = text_draw.textbbox((0, 0), line, font=font)
+                        line_width = bbox[2] - bbox[0]
+                        # 中央揃えで描画
+                        line_x = self.OVERLAY_PADDING + (max_width - line_width) // 2
+                        line_y = int(self.OVERLAY_PADDING + i * line_height)
+                        text_draw.text((line_x, line_y), line, font=font, fill=color)
+                    except Exception as e:
+                        print(f"テキスト描画エラー (行 {i+1}): {e}")
+                        # エラーの場合はシンプルな描画を試行
+                        try:
+                            line_x = self.OVERLAY_PADDING
+                            line_y = int(self.OVERLAY_PADDING + i * line_height)
+                            text_draw.text((line_x, line_y), line, font=font, fill=color)
+                        except:
+                            print(f"シンプル描画も失敗: {line}")
                 # 空行の場合は何も描画しないが、スペースは確保される
             
             # PillowとCSSの回転方向の違いを修正（負の値で時計回り）
@@ -826,12 +891,22 @@ class HirsakamGenerator:
             for i, line in enumerate(lines):
                 # 空行も含めて描画（フロントエンドと一致させる）
                 if line.strip():
-                    bbox = draw.textbbox((0, 0), line, font=font)
-                    line_width = bbox[2] - bbox[0]
-                    # 中央揃えで描画
-                    line_x = position[0] - line_width // 2
-                    line_y = int(start_y + i * line_height)
-                    draw.text((line_x, line_y), line, font=font, fill=color)
+                    try:
+                        bbox = draw.textbbox((0, 0), line, font=font)
+                        line_width = bbox[2] - bbox[0]
+                        # 中央揃えで描画
+                        line_x = position[0] - line_width // 2
+                        line_y = int(start_y + i * line_height)
+                        draw.text((line_x, line_y), line, font=font, fill=color)
+                    except Exception as e:
+                        print(f"テキスト描画エラー (行 {i+1}): {e}")
+                        # エラーの場合はシンプルな描画を試行
+                        try:
+                            line_x = position[0]
+                            line_y = int(start_y + i * line_height)
+                            draw.text((line_x, line_y), line, font=font, fill=color)
+                        except:
+                            print(f"シンプル描画も失敗: {line}")
                 # 空行の場合は何も描画しないが、スペースは確保される
         
         return image
