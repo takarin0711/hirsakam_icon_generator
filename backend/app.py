@@ -464,8 +464,8 @@ async def gacha():
         probabilities = {
             'N': 0.50,    # 50%
             'R': 0.30,    # 30%
-            'SR': 0.15,   # 15%
-            'SSR': 0.05   # 5%
+            'SR': 0.17,   # 17%
+            'SSR': 0.03   # 3%
         }
         
         # レアリティを抽選
@@ -509,6 +509,93 @@ async def gacha():
             "rarity": selected_rarity,
             "image_url": f"/gacha-image/{rarity_dirs[selected_rarity]}/{image_filename}",
             "filename": image_filename
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/gacha-ten")
+async def gacha_ten():
+    """
+    10連ガチャを引く
+    """
+    try:
+        import random
+        import glob
+        
+        # ガチャ確率設定（通常の9枚）
+        probabilities = {
+            'N': 0.50,    # 50%
+            'R': 0.30,    # 30%
+            'SR': 0.17,   # 17%
+            'SSR': 0.03   # 3%
+        }
+        
+        # 最後の1枚用の確率設定（SR以上確定）
+        guaranteed_probabilities = {
+            'SR': 0.90,   # 90%
+            'SSR': 0.10   # 10%
+        }
+        
+        # 画像ディレクトリのマッピング
+        rarity_dirs = {
+            'N': 'normal',
+            'R': 'rare', 
+            'SR': 'super_rare',
+            'SSR': 'special_super_rare'
+        }
+        
+        def get_random_image(selected_rarity):
+            """指定されたレアリティの画像をランダムに選択"""
+            gacha_dir = os.path.join("..", "hirsakam_gacha_image", rarity_dirs[selected_rarity])
+            
+            if not os.path.exists(gacha_dir):
+                raise HTTPException(status_code=500, detail=f"ガチャ画像ディレクトリが見つかりません: {gacha_dir}")
+            
+            # ディレクトリ内の画像ファイルを取得
+            image_files = []
+            for ext in ['*.jpg', '*.jpeg', '*.png', '*.gif']:
+                image_files.extend(glob.glob(os.path.join(gacha_dir, ext)))
+            
+            if not image_files:
+                raise HTTPException(status_code=500, detail=f"ガチャ画像が見つかりません: {gacha_dir}")
+            
+            # ランダムに画像を選択
+            selected_image = random.choice(image_files)
+            image_filename = os.path.basename(selected_image)
+            
+            return {
+                "rarity": selected_rarity,
+                "image_url": f"/gacha-image/{rarity_dirs[selected_rarity]}/{image_filename}",
+                "filename": image_filename
+            }
+        
+        def draw_gacha(probs):
+            """確率に基づいてレアリティを抽選"""
+            rand = random.random()
+            cumulative = 0
+            for rarity, prob in probs.items():
+                cumulative += prob
+                if rand <= cumulative:
+                    return rarity
+            return list(probs.keys())[-1]  # フォールバック
+        
+        results = []
+        
+        # 最初の9枚を通常確率で抽選
+        for i in range(9):
+            selected_rarity = draw_gacha(probabilities)
+            result = get_random_image(selected_rarity)
+            results.append(result)
+        
+        # 最後の1枚をSR以上確定で抽選
+        guaranteed_rarity = draw_gacha(guaranteed_probabilities)
+        guaranteed_result = get_random_image(guaranteed_rarity)
+        results.append(guaranteed_result)
+        
+        return {
+            "results": results,
+            "total_count": 10
         }
         
     except Exception as e:
@@ -559,6 +646,59 @@ async def get_gacha_image(rarity: str, filename: str):
         response.headers["Access-Control-Allow-Headers"] = "*"
         
         return response
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/other-images")
+async def get_other_images():
+    """
+    other_imageディレクトリの画像一覧を取得
+    """
+    try:
+        import glob
+        
+        other_image_dir = os.path.join("..", "other_image")
+        print(f"Debug: other_image_dir = {other_image_dir}")
+        print(f"Debug: Directory exists = {os.path.exists(other_image_dir)}")
+        
+        if not os.path.exists(other_image_dir):
+            print("Debug: Directory does not exist")
+            return {"images": []}
+        
+        # 画像ファイルを取得
+        image_files = []
+        for ext in ['*.jpg', '*.jpeg', '*.png', '*.gif']:
+            files = glob.glob(os.path.join(other_image_dir, ext))
+            print(f"Debug: {ext} files = {files}")
+            image_files.extend(files)
+        
+        # ファイル名のみを返す
+        image_names = [os.path.basename(img) for img in image_files]
+        print(f"Debug: image_names = {image_names}")
+        
+        return {"images": image_names}
+        
+    except Exception as e:
+        print(f"Debug: Exception = {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/other-image/{filename}")
+async def get_other_image(filename: str):
+    """
+    other_imageディレクトリの画像を提供
+    """
+    try:
+        # セキュリティチェック: パストラバーサル攻撃を防ぐ
+        if '..' in filename or '/' in filename or '\\' in filename:
+            raise HTTPException(status_code=400, detail="Invalid filename")
+        
+        image_path = os.path.join("..", "other_image", filename)
+        
+        if not os.path.exists(image_path):
+            raise HTTPException(status_code=404, detail="Image not found")
+        
+        return FileResponse(image_path)
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
