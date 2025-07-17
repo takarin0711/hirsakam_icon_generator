@@ -97,6 +97,12 @@ function App() {
   const [gachaResult, setGachaResult] = useState(null);
   const [isGachaDrawing, setIsGachaDrawing] = useState(false);
   
+  // 10連ガチャ機能
+  const [showGachaTenModal, setShowGachaTenModal] = useState(false);
+  const [gachaTenResults, setGachaTenResults] = useState([]);
+  const [isGachaTenDrawing, setIsGachaTenDrawing] = useState(false);
+  
+  
   const previewRef = useRef(null);
   const imageRef = useRef(null);
   const drawingCanvasRef = useRef(null);
@@ -912,6 +918,42 @@ function App() {
     setGachaResult(null);
     setIsGachaDrawing(false);
   };
+
+  const drawGachaTen = async () => {
+    if (isGachaTenDrawing) return;
+    
+    try {
+      setIsGachaTenDrawing(true);
+      setShowGachaTenModal(true);
+      setGachaTenResults([]);
+      
+      const response = await fetch(`${getApiBaseUrl()}/gacha-ten`);
+      if (!response.ok) {
+        throw new Error(`サーバーエラー: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      // 少し演出のための遅延
+      setTimeout(() => {
+        setGachaTenResults(result.results);
+        setIsGachaTenDrawing(false);
+      }, 2000);
+      
+    } catch (error) {
+      console.error('10連ガチャエラー:', error);
+      alert(`10連ガチャでエラーが発生しました: ${error.message}`);
+      setShowGachaTenModal(false);
+      setIsGachaTenDrawing(false);
+    }
+  };
+
+  const closeGachaTenModal = () => {
+    setShowGachaTenModal(false);
+    setGachaTenResults([]);
+    setIsGachaTenDrawing(false);
+  };
+
 
   const clearDrawing = () => {
     if (!drawingCanvasRef.current) return;
@@ -2762,13 +2804,40 @@ function App() {
           
           {/* ガチャボタン */}
           <div style={{ textAlign: 'center', marginTop: '20px' }}>
-            <button
-              onClick={drawGacha}
-              disabled={isGachaDrawing}
-              className="gacha-button"
-            >
-              {isGachaDrawing ? '🎰 ガチャ中...' : '🎰 ガチャを引く'}
-            </button>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', alignItems: 'center' }}>
+              <button
+                onClick={drawGacha}
+                disabled={isGachaDrawing || isGachaTenDrawing}
+                className="gacha-button"
+              >
+                {isGachaDrawing ? '🎰 ガチャ中...' : '🎰 単発ガチャ'}
+              </button>
+              <button
+                onClick={drawGachaTen}
+                disabled={isGachaDrawing || isGachaTenDrawing}
+                className="gacha-ten-button"
+              >
+                {isGachaTenDrawing ? '🎰 10連ガチャ中...' : '🎰 10連ガチャ'}
+              </button>
+              
+              {/* other_image表示（固定画像） */}
+              <div className="other-images-container">
+                <img
+                  src={`${getApiBaseUrl()}/other-image/389b04f7ba17e4d1.png`}
+                  alt="Decoration"
+                  className="other-image-thumbnail"
+                  onError={(e) => {
+                    console.error('Other load error:', e);
+                    e.target.style.display = 'none';
+                  }}
+                />
+                <div className="speech-bubble">
+                  <div className="speech-bubble-text">
+                    10゛連゛無゛料゛！゛
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -2842,11 +2911,11 @@ function App() {
       )}
       
       {/* ガチャモーダル */}
-      {showGachaModal && gachaResult && (
+      {showGachaModal && (
         <div className="gacha-modal-overlay">
           <div className="gacha-modal">
             <div className="gacha-modal-header">
-              <h3>ガチャ結果</h3>
+              <h3>単発ガチャ結果</h3>
               <button
                 onClick={closeGachaModal}
                 className="gacha-modal-close"
@@ -2855,18 +2924,70 @@ function App() {
               </button>
             </div>
             <div className="gacha-modal-content">
-              <div className="gacha-result">
-                <div className={`gacha-rarity gacha-rarity-${gachaResult.rarity.toLowerCase()}`}>
-                  {gachaResult.rarity}
+              {isGachaDrawing ? (
+                <div className="gacha-loading">
+                  <div className="loading-spinner"></div>
+                  <p>ガチャを引いています...</p>
                 </div>
-                <div className="gacha-image-container">
-                  <img
-                    src={`${getApiBaseUrl()}${gachaResult.image_url}`}
-                    alt={`${gachaResult.rarity} ガチャ画像`}
-                    className="gacha-image"
-                  />
+              ) : gachaResult ? (
+                <div className="gacha-result">
+                  <div className={`gacha-rarity gacha-rarity-${gachaResult.rarity.toLowerCase()}`}>
+                    {gachaResult.rarity}
+                  </div>
+                  <div className={`gacha-single-image-container rarity-frame-${gachaResult.rarity.toLowerCase()}`}>
+                    <img
+                      src={`${getApiBaseUrl()}${gachaResult.image_url}`}
+                      alt={`${gachaResult.rarity} ガチャ画像`}
+                      className="gacha-single-image"
+                    />
+                  </div>
                 </div>
-              </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 10連ガチャモーダル */}
+      {showGachaTenModal && (
+        <div className="gacha-modal-overlay">
+          <div className="gacha-ten-modal">
+            <div className="gacha-modal-header">
+              <h3>10連ガチャ結果</h3>
+              <button
+                onClick={closeGachaTenModal}
+                className="gacha-modal-close"
+              >
+                ×
+              </button>
+            </div>
+            <div className="gacha-modal-content">
+              {isGachaTenDrawing ? (
+                <div className="gacha-loading">
+                  <div className="loading-spinner"></div>
+                  <p>10連ガチャを引いています...</p>
+                </div>
+              ) : (
+                <div className="gacha-ten-results">
+                  {gachaTenResults.map((result, index) => (
+                    <div key={index} className="gacha-ten-item">
+                      <div className={`gacha-rarity gacha-rarity-${result.rarity.toLowerCase()}`}>
+                        {result.rarity}
+                      </div>
+                      <div className={`gacha-ten-image-container rarity-frame-${result.rarity.toLowerCase()}`}>
+                        <img
+                          src={`${getApiBaseUrl()}${result.image_url}`}
+                          alt={`${result.rarity} ガチャ画像`}
+                          className="gacha-ten-image"
+                        />
+                      </div>
+                      {index === 9 && (
+                        <div className="guaranteed-badge">SR以上確定</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
