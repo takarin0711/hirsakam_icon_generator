@@ -1032,12 +1032,43 @@ function App() {
           scale: 2,
           useCORS: true,
           allowTaint: true,
-          logging: true  // html2canvasのログを有効化
+          logging: true,
+          imageTimeout: 0,
+          removeContainer: false,
+          foreignObjectRendering: false,
+          width: modalElement.offsetWidth,
+          height: modalElement.offsetHeight,
+          x: 0,
+          y: 0
         });
 
         // 一時スタイルを削除
         document.head.removeChild(tempStyle);
 
+        // 画像の濃度を調整
+        const ctx = canvas.getContext('2d');
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+        
+        // コントラストと明度を調整
+        for (let i = 0; i < data.length; i += 4) {
+          // RGB値を取得
+          let r = data[i];
+          let g = data[i + 1];
+          let b = data[i + 2];
+          
+          // コントラストを上げる（1.2倍）
+          r = Math.min(255, Math.max(0, (r - 128) * 1.2 + 128));
+          g = Math.min(255, Math.max(0, (g - 128) * 1.2 + 128));
+          b = Math.min(255, Math.max(0, (b - 128) * 1.2 + 128));
+          
+          data[i] = r;
+          data[i + 1] = g;
+          data[i + 2] = b;
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+        
         // デバッグ用：canvasの内容を確認
         console.log('Canvas dimensions:', canvas.width, 'x', canvas.height);
         
