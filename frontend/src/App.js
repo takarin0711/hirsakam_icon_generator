@@ -990,8 +990,8 @@ function App() {
 
   const captureGachaScreenshot = async () => {
     try {
-      // html2canvasライブラリを使用してスクリーンショットを取得
-      const { default: html2canvas } = await import('html2canvas');
+      // dom-to-imageライブラリを使用してスクリーンショットを取得
+      const domtoimage = await import('dom-to-image');
       
       // ガチャモーダルの要素を取得
       const modalSelector = shareType === 'single' ? '.gacha-modal' : '.gacha-ten-modal';
@@ -1001,84 +1001,24 @@ function App() {
         throw new Error('ガチャモーダルが見つかりません');
       }
 
-      // スクリーンショット用の一時的なスタイルを追加
-      const tempStyle = document.createElement('style');
-      tempStyle.textContent = `
-        .gacha-image-container {
-          background: #ffffff !important;
-          background-image: none !important;
-        }
-        .gacha-modal-overlay {
-          background: transparent !important;
-        }
-      `;
-      document.head.appendChild(tempStyle);
+      console.log('dom-to-imageでスクリーンショット取得開始...');
 
       try {
-        // デバッグ用：撮影前に少し待機してスタイルを確認
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        // デバッグ用：実際の背景色を確認
-        const imageContainer = modalElement.querySelector('.gacha-image-container');
-        if (imageContainer) {
-          const computedStyle = window.getComputedStyle(imageContainer);
-          console.log('スクリーンショット時の背景色:', computedStyle.background);
-          console.log('スクリーンショット時の背景画像:', computedStyle.backgroundImage);
-        }
-        
-        // スクリーンショットを取得
-        const canvas = await html2canvas(modalElement, {
-          backgroundColor: null,  // 背景を透明にして元の色を保持
-          scale: 1,  // スケールを下げて正確性を優先
-          useCORS: true,
-          allowTaint: true,
-          logging: true,
-          foreignObjectRendering: true,  // SVGなどのレンダリングを改善
-          onclone: (clonedDoc) => {
-            // クローン時にスタイルを強制適用
-            const clonedImageContainers = clonedDoc.querySelectorAll('.gacha-image-container');
-            clonedImageContainers.forEach(container => {
-              container.style.background = 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)';
-              container.style.backgroundImage = 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)';
-            });
+        // dom-to-imageを使用してスクリーンショットを取得
+        const blob = await domtoimage.toBlob(modalElement, {
+          bgcolor: '#ffffff',
+          width: modalElement.offsetWidth * 2,
+          height: modalElement.offsetHeight * 2,
+          style: {
+            transform: 'scale(2)',
+            transformOrigin: 'top left'
           }
         });
 
-        // 一時スタイルを削除
-        document.head.removeChild(tempStyle);
-
-        
-        // デバッグ用：canvasの内容を確認
-        console.log('Canvas dimensions:', canvas.width, 'x', canvas.height);
-        
-        // 撮影したcanvasを一時的にページに表示して確認（デバッグ用）
-        const debugImg = document.createElement('img');
-        debugImg.src = canvas.toDataURL();
-        debugImg.style.position = 'fixed';
-        debugImg.style.top = '10px';
-        debugImg.style.right = '10px';
-        debugImg.style.maxWidth = '200px';
-        debugImg.style.maxHeight = '200px';
-        debugImg.style.border = '2px solid red';
-        debugImg.style.zIndex = '9999';
-        document.body.appendChild(debugImg);
-        
-        // 5秒後にデバッグ画像を削除
-        setTimeout(() => {
-          if (document.body.contains(debugImg)) {
-            document.body.removeChild(debugImg);
-          }
-        }, 5000);
-
-        // Canvasをblobに変換
-        return new Promise(resolve => {
-          canvas.toBlob(resolve, 'image/png', 1.0);
-        });
+        console.log('dom-to-imageスクリーンショット取得完了:', blob);
+        return blob;
       } catch (error) {
-        // エラー時も一時スタイルを削除
-        if (document.head.contains(tempStyle)) {
-          document.head.removeChild(tempStyle);
-        }
+        console.error('dom-to-imageエラー:', error);
         throw error;
       }
     } catch (error) {
