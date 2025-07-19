@@ -1015,16 +1015,50 @@ function App() {
       document.head.appendChild(tempStyle);
 
       try {
+        // デバッグ用：撮影前に少し待機してスタイルを確認
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // デバッグ用：実際の背景色を確認
+        const imageContainer = modalElement.querySelector('.gacha-image-container');
+        if (imageContainer) {
+          const computedStyle = window.getComputedStyle(imageContainer);
+          console.log('スクリーンショット時の背景色:', computedStyle.background);
+          console.log('スクリーンショット時の背景画像:', computedStyle.backgroundImage);
+        }
+        
         // スクリーンショットを取得
         const canvas = await html2canvas(modalElement, {
           backgroundColor: '#ffffff',
           scale: 2,
           useCORS: true,
-          allowTaint: true
+          allowTaint: true,
+          logging: true  // html2canvasのログを有効化
         });
 
         // 一時スタイルを削除
         document.head.removeChild(tempStyle);
+
+        // デバッグ用：canvasの内容を確認
+        console.log('Canvas dimensions:', canvas.width, 'x', canvas.height);
+        
+        // 撮影したcanvasを一時的にページに表示して確認（デバッグ用）
+        const debugImg = document.createElement('img');
+        debugImg.src = canvas.toDataURL();
+        debugImg.style.position = 'fixed';
+        debugImg.style.top = '10px';
+        debugImg.style.right = '10px';
+        debugImg.style.maxWidth = '200px';
+        debugImg.style.maxHeight = '200px';
+        debugImg.style.border = '2px solid red';
+        debugImg.style.zIndex = '9999';
+        document.body.appendChild(debugImg);
+        
+        // 5秒後にデバッグ画像を削除
+        setTimeout(() => {
+          if (document.body.contains(debugImg)) {
+            document.body.removeChild(debugImg);
+          }
+        }, 5000);
 
         // Canvasをblobに変換
         return new Promise(resolve => {
