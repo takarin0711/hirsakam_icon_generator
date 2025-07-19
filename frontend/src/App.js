@@ -1004,14 +1004,29 @@ function App() {
       console.log('dom-to-imageでスクリーンショット取得開始...');
 
       try {
+        // モーダルのサイズを正確に取得
+        const rect = modalElement.getBoundingClientRect();
+        const scrollHeight = modalElement.scrollHeight;
+        const offsetHeight = modalElement.offsetHeight;
+        
+        console.log('モーダルサイズ情報:', {
+          offsetWidth: modalElement.offsetWidth,
+          offsetHeight: modalElement.offsetHeight,
+          scrollHeight: scrollHeight,
+          clientHeight: modalElement.clientHeight,
+          rect: rect
+        });
+
         // dom-to-imageを使用してスクリーンショットを取得
         const blob = await domtoimage.toBlob(modalElement, {
           bgcolor: '#ffffff',
           width: modalElement.offsetWidth * 2,
-          height: modalElement.offsetHeight * 2,
+          height: Math.max(scrollHeight, offsetHeight) * 2, // スクロール高さを考慮
           style: {
             transform: 'scale(2)',
-            transformOrigin: 'top left'
+            transformOrigin: 'top left',
+            maxHeight: 'none', // 最大高さ制限を解除
+            overflow: 'visible' // オーバーフローを表示
           }
         });
 
