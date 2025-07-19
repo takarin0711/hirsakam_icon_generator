@@ -102,6 +102,14 @@ function App() {
   const [gachaTenResults, setGachaTenResults] = useState([]);
   const [isGachaTenDrawing, setIsGachaTenDrawing] = useState(false);
   
+  // Slack共有機能
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareType, setShareType] = useState('single'); // 'single' または 'ten'
+  const [shareChannel, setShareChannel] = useState('');
+  const [shareMessage, setShareMessage] = useState('');
+  const [isSharing, setIsSharing] = useState(false);
+  const [shareResult, setShareResult] = useState(null);
+  
   
   const previewRef = useRef(null);
   const imageRef = useRef(null);
@@ -952,6 +960,103 @@ function App() {
     setShowGachaTenModal(false);
     setGachaTenResults([]);
     setIsGachaTenDrawing(false);
+  };
+
+  // Slack共有機能
+  const openShareModal = (type) => {
+    setShareType(type);
+    setShowShareModal(true);
+    setShareChannel(process.env.SLACK_DEFAULT_CHANNEL || '#tmp-hirsakam-icon-generator');
+    
+    // デフォルトメッセージを設定
+    if (type === 'single' && gachaResult) {
+      setShareMessage(`ガチャで${gachaResult.rarity}が出ました！🎰`);
+    } else if (type === 'ten' && gachaTenResults.length > 0) {
+      const rarities = gachaTenResults.map(r => r.rarity);
+      const ssrCount = rarities.filter(r => r === 'SSR').length;
+      const srCount = rarities.filter(r => r === 'SR').length;
+      setShareMessage(`10連ガチャ結果: SSR×${ssrCount}, SR×${srCount}枚！🎰✨`);
+    }
+    setShareResult(null);
+  };
+
+  const closeShareModal = () => {
+    setShowShareModal(false);
+    setShareChannel('');
+    setShareMessage('');
+    setIsSharing(false);
+    setShareResult(null);
+  };
+
+  const captureGachaScreenshot = async () => {
+    try {
+      // html2canvasライブラリを使用してスクリーンショットを取得
+      const { default: html2canvas } = await import('html2canvas');
+      
+      // ガチャモーダルの要素を取得
+      const modalSelector = shareType === 'single' ? '.gacha-modal' : '.gacha-ten-modal';
+      const modalElement = document.querySelector(modalSelector);
+      
+      if (!modalElement) {
+        throw new Error('ガチャモーダルが見つかりません');
+      }
+
+      // スクリーンショットを取得
+      const canvas = await html2canvas(modalElement, {
+        backgroundColor: '#ffffff',
+        scale: 2, // 高解像度
+        useCORS: true,
+        allowTaint: true
+      });
+
+      // Canvasをblobに変換
+      return new Promise(resolve => {
+        canvas.toBlob(resolve, 'image/png', 0.9);
+      });
+    } catch (error) {
+      console.error('スクリーンショット取得エラー:', error);
+      throw error;
+    }
+  };
+
+  const shareToSlack = async () => {
+    if (!shareChannel.trim() || !shareMessage.trim()) {
+      setShareResult({ success: false, message: 'チャンネル名とメッセージを入力してください' });
+      return;
+    }
+
+    setIsSharing(true);
+    setShareResult(null);
+
+    try {
+      // スクリーンショットを取得
+      const screenshotBlob = await captureGachaScreenshot();
+      
+      // FormDataを作成
+      const formData = new FormData();
+      formData.append('channel', shareChannel);
+      formData.append('message', shareMessage);
+      formData.append('screenshot', screenshotBlob, 'gacha_result.png');
+
+      // APIに送信
+      const response = await fetch(`${getApiBaseUrl()}/share-to-slack`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        setShareResult({ success: true, message: result.message });
+      } else {
+        setShareResult({ success: false, message: result.detail || 'Slack送信に失敗しました' });
+      }
+    } catch (error) {
+      console.error('Slack共有エラー:', error);
+      setShareResult({ success: false, message: 'ネットワークエラーが発生しました' });
+    } finally {
+      setIsSharing(false);
+    }
   };
 
 
@@ -2916,12 +3021,22 @@ function App() {
           <div className="gacha-modal">
             <div className="gacha-modal-header">
               <h3>単発ガチャ結果</h3>
-              <button
-                onClick={closeGachaModal}
-                className="gacha-modal-close"
-              >
-                ×
-              </button>
+              <div className="gacha-modal-header-buttons">
+                {gachaResult && !isGachaDrawing && (
+                  <button
+                    onClick={() => openShareModal('single')}
+                    className="gacha-share-button"
+                  >
+                    📤 共有
+                  </button>
+                )}
+                <button
+                  onClick={closeGachaModal}
+                  className="gacha-modal-close"
+                >
+                  ×
+                </button>
+              </div>
             </div>
             <div className="gacha-modal-content">
               {isGachaDrawing ? (
@@ -2954,12 +3069,22 @@ function App() {
           <div className="gacha-ten-modal">
             <div className="gacha-modal-header">
               <h3>10連ガチャ結果</h3>
-              <button
-                onClick={closeGachaTenModal}
-                className="gacha-modal-close"
-              >
-                ×
-              </button>
+              <div className="gacha-modal-header-buttons">
+                {gachaTenResults.length > 0 && !isGachaTenDrawing && (
+                  <button
+                    onClick={() => openShareModal('ten')}
+                    className="gacha-share-button"
+                  >
+                    📤 共有
+                  </button>
+                )}
+                <button
+                  onClick={closeGachaTenModal}
+                  className="gacha-modal-close"
+                >
+                  ×
+                </button>
+              </div>
             </div>
             <div className="gacha-modal-content">
               {isGachaTenDrawing ? (
@@ -2988,6 +3113,75 @@ function App() {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Slack共有モーダル */}
+      {showShareModal && (
+        <div className="share-modal-overlay">
+          <div className="share-modal">
+            <div className="share-modal-header">
+              <h3>Slackに共有</h3>
+              <button
+                onClick={closeShareModal}
+                className="share-modal-close"
+              >
+                ×
+              </button>
+            </div>
+            <div className="share-modal-content">
+              <div className="share-form">
+                <div className="form-group">
+                  <label htmlFor="shareChannel">投稿先チャンネル:</label>
+                  <input
+                    type="text"
+                    id="shareChannel"
+                    value={shareChannel}
+                    onChange={(e) => setShareChannel(e.target.value)}
+                    placeholder="#tmp-hirsakam-icon-generator"
+                    className="text-input"
+                    disabled={isSharing}
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label htmlFor="shareMessage">メッセージ:</label>
+                  <textarea
+                    id="shareMessage"
+                    value={shareMessage}
+                    onChange={(e) => setShareMessage(e.target.value)}
+                    placeholder="ガチャ結果をシェア！"
+                    className="text-input"
+                    rows="3"
+                    disabled={isSharing}
+                  />
+                </div>
+
+                {shareResult && (
+                  <div className={`share-result ${shareResult.success ? 'success' : 'error'}`}>
+                    {shareResult.message}
+                  </div>
+                )}
+
+                <div className="share-buttons">
+                  <button
+                    onClick={shareToSlack}
+                    disabled={isSharing || !shareChannel.trim() || !shareMessage.trim()}
+                    className={`preview-button-single ${isSharing ? 'sharing' : ''}`}
+                  >
+                    {isSharing ? '📤 送信中...' : '📤 Slackに投稿'}
+                  </button>
+                  <button
+                    onClick={closeShareModal}
+                    className="back-button"
+                    disabled={isSharing}
+                  >
+                    キャンセル
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
