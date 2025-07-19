@@ -754,17 +754,16 @@ async def share_to_slack(
         
         print(f"スクリーンショットを一時保存: {screenshot_path}")
         
-        # TODO: 実際のSlack APIではファイルアップロードが必要
-        # 現在はテキストメッセージのみ送信（スクリーンショット機能は後で実装）
+        # Slackにスクリーンショット付きメッセージを送信
+        # files.upload APIを使用してファイル送信
+        files_upload_url = slack_webhook_url.replace('/chat.postMessage', '/files.upload')
         
-        # Slackにメッセージを送信
         curl_command = [
-            'curl', slack_webhook_url,
-            '--data', f'channel={channel}',
-            '--data', 'username=hirsakam_icon_generator_bot',
-            '--data', f'text={message}',
-            '--data', f'icon_url={slack_bot_icon}',
-            '--data', 'link_names=true'
+            'curl',
+            '-F', f'file=@{screenshot_path}',
+            '-F', f'initial_comment={message}',
+            '-F', f'channels={channel}',
+            files_upload_url
         ]
         
         print(f"Slack送信コマンド: {' '.join(curl_command)}")
