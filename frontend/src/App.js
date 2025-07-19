@@ -1035,8 +1035,9 @@ function App() {
         // dom-to-imageを使用してスクリーンショットを取得
         const blob = await domtoimage.toBlob(modalElement, {
           bgcolor: '#ffffff',
-          width: modalElement.offsetWidth * 2,
-          height: modalElement.offsetHeight * 2
+          width: modalElement.offsetWidth,  // スケールを元に戻す
+          height: modalElement.offsetHeight,
+          quality: 1.0  // 最高品質
         });
 
         // 元のスタイルを復元
