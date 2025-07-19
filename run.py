@@ -9,19 +9,39 @@ import os
 import time
 import signal
 from pathlib import Path
+# 統一された環境変数ファイルを読み込み
+def load_env_file():
+    """統一された環境変数ファイルを読み込み（python-dotenv不要版）"""
+    env_path = Path(__file__).parent / "env" / ".env"
+    if env_path.exists():
+        try:
+            with open(env_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        key, value = line.split('=', 1)
+                        key = key.strip()
+                        value = value.strip().strip('"').strip("'")
+                        os.environ[key] = value
+            print(f"📄 環境変数ファイルを読み込み: {env_path}")
+        except Exception as e:
+            print(f"⚠️ 環境変数ファイル読み込みエラー: {e}")
+    else:
+        print(f"📄 環境変数ファイルが見つかりません: {env_path} (デフォルト設定を使用)")
 
 def setup_environment():
     """環境変数を設定"""
+    # 統一された環境変数ファイルを読み込み
+    load_env_file()
+    
     # SERVER_URLが設定されている場合、子プロセス用の環境変数を準備
     server_url = os.getenv("SERVER_URL")
     env = os.environ.copy()
     
     if server_url:
         print(f"🌐 SERVER_URL が設定されています: {server_url}")
-        # バックエンド用（そのまま渡す）
+        # バックエンド・フロントエンド共通でSERVER_URLを使用
         env["SERVER_URL"] = server_url
-        # フロントエンド用（REACT_APP_プレフィックスを追加）
-        env["REACT_APP_SERVER_URL"] = server_url
     
     return env
 

@@ -15,6 +15,28 @@ import shutil
 from hirsakam_icon_generator import HirsakamGenerator
 import uuid
 import uvicorn
+# 統一された環境変数ファイルを読み込み（python-dotenv不要版）
+def load_env_file():
+    """統一された環境変数ファイルを読み込み"""
+    env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "env", ".env")
+    if os.path.exists(env_path):
+        try:
+            with open(env_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        key, value = line.split('=', 1)
+                        key = key.strip()
+                        value = value.strip().strip('"').strip("'")
+                        os.environ[key] = value
+            print(f"📄 環境変数ファイルを読み込み: {env_path}")
+        except Exception as e:
+            print(f"⚠️ 環境変数ファイル読み込みエラー: {e}")
+    else:
+        print(f"📄 環境変数ファイルが見つかりません: {env_path} (デフォルト設定を使用)")
+
+# 環境変数ファイルを読み込み
+load_env_file()
 
 # ファイルサイズ制限を設定（5MB）
 app = FastAPI(

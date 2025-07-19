@@ -1291,8 +1291,8 @@ function App() {
   // APIベースURLを環境に応じて動的に取得
   const getApiBaseUrl = () => {
     // 環境変数があればそれを使用（ポート8000を自動追加）
-    if (process.env.REACT_APP_SERVER_URL) {
-      return `${process.env.REACT_APP_SERVER_URL}:8000`;
+    if (process.env.SERVER_URL) {
+      return `${process.env.SERVER_URL}:8000`;
     }
     
     // 開発環境またはlocalhostの場合
