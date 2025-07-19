@@ -1006,12 +1006,14 @@ function App() {
         backgroundColor: '#ffffff',
         scale: 2, // 高解像度
         useCORS: true,
-        allowTaint: true
+        allowTaint: true,
+        foreignObjectRendering: false, // より確実なレンダリング
+        removeContainer: true // コンテナを除去してクリーンな画像
       });
 
-      // Canvasをblobに変換
+      // Canvasをblobに変換（品質を最大に）
       return new Promise(resolve => {
-        canvas.toBlob(resolve, 'image/png', 0.9);
+        canvas.toBlob(resolve, 'image/png', 1.0);
       });
     } catch (error) {
       console.error('スクリーンショット取得エラー:', error);
