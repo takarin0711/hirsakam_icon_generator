@@ -1001,20 +1001,44 @@ function App() {
         throw new Error('ガチャモーダルが見つかりません');
       }
 
-      // スクリーンショットを取得
-      const canvas = await html2canvas(modalElement, {
-        backgroundColor: '#ffffff',
-        scale: 2, // 高解像度
-        useCORS: true,
-        allowTaint: true,
-        foreignObjectRendering: false, // より確実なレンダリング
-        removeContainer: true // コンテナを除去してクリーンな画像
-      });
+      // 一時的なコンテナを作成
+      const tempContainer = document.createElement('div');
+      tempContainer.style.position = 'fixed';
+      tempContainer.style.top = '-9999px';
+      tempContainer.style.left = '-9999px';
+      tempContainer.style.backgroundColor = '#ffffff';
+      tempContainer.style.padding = '20px';
+      tempContainer.style.borderRadius = '12px';
+      tempContainer.style.boxShadow = '0 10px 30px rgba(0, 0, 0, 0.1)';
+      
+      // モーダルの内容をコピー
+      const clonedModal = modalElement.cloneNode(true);
+      tempContainer.appendChild(clonedModal);
+      document.body.appendChild(tempContainer);
 
-      // Canvasをblobに変換（品質を最大に）
-      return new Promise(resolve => {
-        canvas.toBlob(resolve, 'image/png', 1.0);
-      });
+      try {
+        // スクリーンショットを取得
+        const canvas = await html2canvas(tempContainer, {
+          backgroundColor: '#ffffff',
+          scale: 2,
+          useCORS: true,
+          allowTaint: true
+        });
+
+        // 一時コンテナを削除
+        document.body.removeChild(tempContainer);
+
+        // Canvasをblobに変換
+        return new Promise(resolve => {
+          canvas.toBlob(resolve, 'image/png', 1.0);
+        });
+      } catch (error) {
+        // エラー時も一時コンテナを削除
+        if (document.body.contains(tempContainer)) {
+          document.body.removeChild(tempContainer);
+        }
+        throw error;
+      }
     } catch (error) {
       console.error('スクリーンショット取得エラー:', error);
       throw error;
