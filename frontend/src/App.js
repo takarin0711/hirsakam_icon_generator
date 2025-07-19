@@ -1001,41 +1001,36 @@ function App() {
         throw new Error('ガチャモーダルが見つかりません');
       }
 
-      // 一時的なコンテナを作成
-      const tempContainer = document.createElement('div');
-      tempContainer.style.position = 'fixed';
-      tempContainer.style.top = '-9999px';
-      tempContainer.style.left = '-9999px';
-      tempContainer.style.backgroundColor = '#ffffff';
-      tempContainer.style.padding = '20px';
-      tempContainer.style.borderRadius = '12px';
-      tempContainer.style.boxShadow = '0 10px 30px rgba(0, 0, 0, 0.1)';
-      
-      // モーダルの内容をコピー
-      const clonedModal = modalElement.cloneNode(true);
-      tempContainer.appendChild(clonedModal);
-      document.body.appendChild(tempContainer);
+      // オーバーレイを一時的に非表示
+      const overlayElement = document.querySelector('.gacha-modal-overlay');
+      let originalOverlayStyle = null;
+      if (overlayElement) {
+        originalOverlayStyle = overlayElement.style.background;
+        overlayElement.style.background = 'transparent';
+      }
 
       try {
         // スクリーンショットを取得
-        const canvas = await html2canvas(tempContainer, {
+        const canvas = await html2canvas(modalElement, {
           backgroundColor: '#ffffff',
           scale: 2,
           useCORS: true,
           allowTaint: true
         });
 
-        // 一時コンテナを削除
-        document.body.removeChild(tempContainer);
+        // オーバーレイスタイルを復元
+        if (overlayElement && originalOverlayStyle !== null) {
+          overlayElement.style.background = originalOverlayStyle;
+        }
 
         // Canvasをblobに変換
         return new Promise(resolve => {
           canvas.toBlob(resolve, 'image/png', 1.0);
         });
       } catch (error) {
-        // エラー時も一時コンテナを削除
-        if (document.body.contains(tempContainer)) {
-          document.body.removeChild(tempContainer);
+        // エラー時もオーバーレイスタイルを復元
+        if (overlayElement && originalOverlayStyle !== null) {
+          overlayElement.style.background = originalOverlayStyle;
         }
         throw error;
       }
