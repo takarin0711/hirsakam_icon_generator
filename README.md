@@ -66,42 +66,52 @@ python3 run.py help      # ヘルプ表示
 
 ## ⚙️ サーバー環境での設定
 
-### 環境変数設定
+### 統一された環境変数設定
 
-**.env ファイル設定例**:
-
-**バックエンド** (backend/.env):
+**env/.env ファイル設定例** (推奨):
 ```bash
+# 統一された環境変数設定ファイル
+# バックエンド・フロントエンド共通で使用
+
+# サーバーURL設定（オプション）
+# 設定しない場合は自動検出されます
 SERVER_URL=http://your-server.com
+
+# 例:
+# SERVER_URL=http://localhost        # ローカル開発
+# SERVER_URL=http://your-server.com  # 本番環境
+# SERVER_URL=*                       # 全オリジン許可（テスト用のみ）
 ```
 
-**フロントエンド** (frontend/.env):
-```bash
-# Note: React requires REACT_APP_ prefix
-REACT_APP_SERVER_URL=http://your-server.com
-```
+**設定手順**:
+1. `env/.env` ファイルを編集
+2. 必要に応じて `SERVER_URL` を設定（コメントアウトを解除）
+3. `python3 run.py` で起動
 
 ### 起動コマンド例
 
 **統合スクリプト使用（推奨）**:
 ```bash
-# ローカル環境
+# ローカル環境（環境変数不要）
 python3 run.py
 
-# サーバー環境
+# サーバー環境（env/.envファイルを使用）
+python3 run.py
+
+# 環境変数で直接指定
 SERVER_URL="http://your-server" python3 run.py
 ```
 
 **個別起動**:
 ```bash
-# サーバー環境での起動（同じサーバーURLを使用）
+# サーバー環境での起動（統一されたSERVER_URLを使用）
 SERVER_URL="http://your-server"
 
 # バックエンド起動
 cd backend && SERVER_URL="$SERVER_URL" python3 app.py
 
-# フロントエンド起動（Reactには REACT_APP_ プレフィックスが必要）
-cd frontend && REACT_APP_SERVER_URL="$SERVER_URL" npm start
+# フロントエンド起動（SERVER_URLで統一）
+cd frontend && SERVER_URL="$SERVER_URL" npm start
 ```
 
 ## ✨ 機能
