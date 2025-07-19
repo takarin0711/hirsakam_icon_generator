@@ -1028,46 +1028,25 @@ function App() {
         
         // スクリーンショットを取得
         const canvas = await html2canvas(modalElement, {
-          backgroundColor: '#ffffff',
-          scale: 2,
+          backgroundColor: null,  // 背景を透明にして元の色を保持
+          scale: 1,  // スケールを下げて正確性を優先
           useCORS: true,
           allowTaint: true,
           logging: true,
-          imageTimeout: 0,
-          removeContainer: false,
-          foreignObjectRendering: false,
-          width: modalElement.offsetWidth,
-          height: modalElement.offsetHeight,
-          x: 0,
-          y: 0
+          foreignObjectRendering: true,  // SVGなどのレンダリングを改善
+          onclone: (clonedDoc) => {
+            // クローン時にスタイルを強制適用
+            const clonedImageContainers = clonedDoc.querySelectorAll('.gacha-image-container');
+            clonedImageContainers.forEach(container => {
+              container.style.background = 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)';
+              container.style.backgroundImage = 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)';
+            });
+          }
         });
 
         // 一時スタイルを削除
         document.head.removeChild(tempStyle);
 
-        // 画像の濃度を調整
-        const ctx = canvas.getContext('2d');
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data = imageData.data;
-        
-        // コントラストと明度を調整
-        for (let i = 0; i < data.length; i += 4) {
-          // RGB値を取得
-          let r = data[i];
-          let g = data[i + 1];
-          let b = data[i + 2];
-          
-          // コントラストを上げる（1.2倍）
-          r = Math.min(255, Math.max(0, (r - 128) * 1.2 + 128));
-          g = Math.min(255, Math.max(0, (g - 128) * 1.2 + 128));
-          b = Math.min(255, Math.max(0, (b - 128) * 1.2 + 128));
-          
-          data[i] = r;
-          data[i + 1] = g;
-          data[i + 2] = b;
-        }
-        
-        ctx.putImageData(imageData, 0, 0);
         
         // デバッグ用：canvasの内容を確認
         console.log('Canvas dimensions:', canvas.width, 'x', canvas.height);
