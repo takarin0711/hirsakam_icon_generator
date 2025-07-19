@@ -1001,13 +1001,18 @@ function App() {
         throw new Error('ガチャモーダルが見つかりません');
       }
 
-      // スクリーンショット用に背景を白に変更
-      const imageContainers = modalElement.querySelectorAll('.gacha-image-container');
-      const originalBackgrounds = [];
-      imageContainers.forEach((container, index) => {
-        originalBackgrounds[index] = container.style.background;
-        container.style.background = '#ffffff';
-      });
+      // スクリーンショット用の一時的なスタイルを追加
+      const tempStyle = document.createElement('style');
+      tempStyle.textContent = `
+        .gacha-image-container {
+          background: #ffffff !important;
+          background-image: none !important;
+        }
+        .gacha-modal-overlay {
+          background: transparent !important;
+        }
+      `;
+      document.head.appendChild(tempStyle);
 
       try {
         // スクリーンショットを取得
@@ -1018,20 +1023,18 @@ function App() {
           allowTaint: true
         });
 
-        // 背景を復元
-        imageContainers.forEach((container, index) => {
-          container.style.background = originalBackgrounds[index];
-        });
+        // 一時スタイルを削除
+        document.head.removeChild(tempStyle);
 
         // Canvasをblobに変換
         return new Promise(resolve => {
           canvas.toBlob(resolve, 'image/png', 1.0);
         });
       } catch (error) {
-        // エラー時も背景を復元
-        imageContainers.forEach((container, index) => {
-          container.style.background = originalBackgrounds[index];
-        });
+        // エラー時も一時スタイルを削除
+        if (document.head.contains(tempStyle)) {
+          document.head.removeChild(tempStyle);
+        }
         throw error;
       }
     } catch (error) {
