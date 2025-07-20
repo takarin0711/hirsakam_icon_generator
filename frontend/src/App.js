@@ -2972,7 +2972,7 @@ function App() {
               {/* other_image表示（固定画像） */}
               <div className="other-images-container">
                 <img
-                  src={`${getApiBaseUrl()}/other-image/389b04f7ba17e4d1.png`}
+                  src={`${getApiBaseUrl()}/other-image/user_hirsakam_eyes2.png`}
                   alt="Decoration"
                   className="other-image-thumbnail"
                   onError={(e) => {
