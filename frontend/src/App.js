@@ -1003,13 +1003,14 @@ function App() {
 
       console.log('dom-to-imageでスクリーンショット取得開始...');
 
+      // スクリーンショット撮影用に一時的にスタイルを変更
+      const originalStyles = {
+        maxHeight: modalElement.style.maxHeight,
+        overflow: modalElement.style.overflow,
+        height: modalElement.style.height
+      };
+
       try {
-        // スクリーンショット撮影用に一時的にスタイルを変更
-        const originalStyles = {
-          maxHeight: modalElement.style.maxHeight,
-          overflow: modalElement.style.overflow,
-          height: modalElement.style.height
-        };
         
         // 高さ制限を一時的に解除
         modalElement.style.maxHeight = 'none';
@@ -1049,11 +1050,9 @@ function App() {
         return blob;
       } catch (error) {
         // エラー時も元のスタイルを復元
-        if (typeof originalStyles !== 'undefined') {
-          modalElement.style.maxHeight = originalStyles.maxHeight;
-          modalElement.style.overflow = originalStyles.overflow;
-          modalElement.style.height = originalStyles.height;
-        }
+        modalElement.style.maxHeight = originalStyles.maxHeight;
+        modalElement.style.overflow = originalStyles.overflow;
+        modalElement.style.height = originalStyles.height;
         console.error('dom-to-imageエラー:', error);
         throw error;
       }
