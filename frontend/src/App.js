@@ -104,11 +104,12 @@ function App() {
   
   // Slack共有機能
   const [showShareModal, setShowShareModal] = useState(false);
-  const [shareType, setShareType] = useState('single'); // 'single' または 'ten'
+  const [shareType, setShareType] = useState('single'); // 'single', 'ten', 'generated'
   const [shareChannel, setShareChannel] = useState('');
   const [shareMessage, setShareMessage] = useState('');
   const [isSharing, setIsSharing] = useState(false);
   const [shareResult, setShareResult] = useState(null);
+  const [shareImageUrl, setShareImageUrl] = useState(''); // 生成画像共有用
   
   
   const previewRef = useRef(null);
@@ -963,7 +964,7 @@ function App() {
   };
 
   // Slack共有機能
-  const openShareModal = (type) => {
+  const openShareModal = (type, imageUrl = '') => {
     setShareType(type);
     setShowShareModal(true);
     setShareChannel(process.env.SLACK_DEFAULT_CHANNEL || '#tmp-hirsakam-icon-generator');
@@ -976,6 +977,9 @@ function App() {
       const ssrCount = rarities.filter(r => r === 'SSR').length;
       const srCount = rarities.filter(r => r === 'SR').length;
       setShareMessage(`10連ガチャ結果: SSR×${ssrCount}, SR×${srCount}枚！🎰✨`);
+    } else if (type === 'generated') {
+      setShareMessage(`Hirsakam Icon Generator で画像を生成しました！🎨✨`);
+      setShareImageUrl(imageUrl);
     }
     setShareResult(null);
   };
@@ -986,6 +990,7 @@ function App() {
     setShareMessage('');
     setIsSharing(false);
     setShareResult(null);
+    setShareImageUrl(''); // 生成画像URLもクリア
   };
 
   const captureGachaScreenshot = async () => {
@@ -1072,14 +1077,25 @@ function App() {
     setShareResult(null);
 
     try {
-      // スクリーンショットを取得
-      const screenshotBlob = await captureGachaScreenshot();
+      let screenshotBlob;
+      let filename;
+
+      if (shareType === 'generated') {
+        // 生成画像の場合：URLから画像をダウンロードしてblobに変換
+        const response = await fetch(shareImageUrl);
+        screenshotBlob = await response.blob();
+        filename = 'generated_image.jpg';
+      } else {
+        // ガチャの場合：スクリーンショットを取得
+        screenshotBlob = await captureGachaScreenshot();
+        filename = 'gacha_result.png';
+      }
       
       // FormDataを作成
       const formData = new FormData();
       formData.append('channel', shareChannel);
       formData.append('message', shareMessage);
-      formData.append('screenshot', screenshotBlob, 'gacha_result.png');
+      formData.append('screenshot', screenshotBlob, filename);
 
       // APIに送信
       const response = await fetch(`${getApiBaseUrl()}/share-to-slack`, {
@@ -2822,6 +2838,12 @@ function App() {
                   className="download-button"
                 >
                   ダウンロード
+                </button>
+                <button 
+                  onClick={() => openShareModal('generated', generatedImage)}
+                  className="share-button"
+                >
+                  📤 共有
                 </button>
               </div>
             ) : (

@@ -398,6 +398,22 @@ textarea.text-input {
   background: #218838;
 }
 
+.share-button {
+  padding: 10px 20px;
+  background: #6c5ce7;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background 0.3s;
+  margin-left: 10px;
+}
+
+.share-button:hover {
+  background: #5a4fcf;
+}
+
 .gallery-section {
   background: white;
   border-radius: 15px;
