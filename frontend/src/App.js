@@ -1077,31 +1077,33 @@ function App() {
     setShareResult(null);
 
     try {
-      let screenshotBlob;
-      let filename;
+      let response;
 
       if (shareType === 'generated') {
-        // 生成画像の場合：URLから画像をダウンロードしてblobに変換
-        const response = await fetch(shareImageUrl);
-        screenshotBlob = await response.blob();
-        filename = 'generated_image.jpg';
-      } else {
-        // ガチャの場合：スクリーンショットを取得
-        screenshotBlob = await captureGachaScreenshot();
-        filename = 'gacha_result.png';
-      }
-      
-      // FormDataを作成
-      const formData = new FormData();
-      formData.append('channel', shareChannel);
-      formData.append('message', shareMessage);
-      formData.append('screenshot', screenshotBlob, filename);
+        // 生成画像の場合：専用エンドポイントを使用
+        const formData = new FormData();
+        formData.append('channel', shareChannel);
+        formData.append('message', shareMessage);
+        formData.append('image_path', shareImageUrl);
 
-      // APIに送信
-      const response = await fetch(`${getApiBaseUrl()}/share-to-slack`, {
-        method: 'POST',
-        body: formData,
-      });
+        response = await fetch(`${getApiBaseUrl()}/share-generated-image-to-slack`, {
+          method: 'POST',
+          body: formData,
+        });
+      } else {
+        // ガチャの場合：スクリーンショットを取得して既存エンドポイント使用
+        const screenshotBlob = await captureGachaScreenshot();
+        
+        const formData = new FormData();
+        formData.append('channel', shareChannel);
+        formData.append('message', shareMessage);
+        formData.append('screenshot', screenshotBlob, 'gacha_result.png');
+
+        response = await fetch(`${getApiBaseUrl()}/share-to-slack`, {
+          method: 'POST',
+          body: formData,
+        });
+      }
 
       const result = await response.json();
 

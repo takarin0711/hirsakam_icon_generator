@@ -808,6 +808,79 @@ async def share_to_slack(
         print(f"Slack送信エラー: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/share-generated-image-to-slack")
+async def share_generated_image_to_slack(
+    channel: str = Form(...),
+    message: str = Form(...),
+    image_path: str = Form(...)
+):
+    """
+    生成済み画像をSlackに共有
+    """
+    try:
+        import subprocess
+        import json
+        
+        # 環境変数からSlack設定を取得
+        slack_webhook_url = os.getenv("SLACK_WEBHOOK_URL")
+        slack_bot_icon = os.getenv("SLACK_BOT_ICON_URL", "")
+        
+        if not slack_webhook_url:
+            raise HTTPException(status_code=400, detail="Slack Webhook URLが設定されていません。env/.envファイルでSLACK_WEBHOOK_URLを設定してください。")
+        
+        # 生成画像のファイルパスを構築
+        # image_path は "/download/image_xxx.jpg" 形式なので、実際のファイルパスに変換
+        filename = image_path.split('/')[-1]  # "image_xxx.jpg"
+        actual_image_path = os.path.join("..", "output", filename)
+        
+        if not os.path.exists(actual_image_path):
+            raise HTTPException(status_code=404, detail=f"画像ファイルが見つかりません: {filename}")
+        
+        print(f"生成画像を送信: {actual_image_path}")
+        
+        # Slackに画像付きメッセージを送信
+        # files.upload APIを使用してファイル送信
+        files_upload_url = slack_webhook_url.replace('/chat.postMessage', '/files.upload')
+        
+        curl_command = [
+            'curl',
+            '-F', f'file=@{actual_image_path}',
+            '-F', f'initial_comment={message}',
+            '-F', f'channels={channel}',
+            files_upload_url
+        ]
+        
+        print(f"Slack送信コマンド: {' '.join(curl_command)}")
+        
+        # curlコマンドを実行
+        result = subprocess.run(
+            curl_command,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        if result.returncode == 0:
+            print(f"Slack送信成功: {result.stdout}")
+            return {
+                "success": True,
+                "message": "Slackに正常に送信されました",
+                "channel": channel,
+                "response": result.stdout
+            }
+        else:
+            print(f"Slack送信失敗: {result.stderr}")
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Slack送信に失敗しました: {result.stderr}"
+            )
+            
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=500, detail="Slack送信がタイムアウトしました")
+    except Exception as e:
+        print(f"Slack送信エラー: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     # ファイルアップロードサイズ制限を5MBに設定
     server_url = os.getenv("SERVER_URL", "http://localhost")
