@@ -969,14 +969,21 @@ function App() {
     setShowShareModal(true);
     setShareChannel(process.env.SLACK_DEFAULT_CHANNEL || '#tmp-hirsakam-icon-generator');
     
-    // デフォルトメッセージを設定
+    // 定型文メッセージを自動生成
     if (type === 'single' && gachaResult) {
-      setShareMessage(`ガチャで${gachaResult.rarity}が出ました！🎰`);
+      setShareMessage(`🎰 Hirsakam ガチャ結果
+${gachaResult.rarity}レアリティが出ました！`);
     } else if (type === 'ten' && gachaTenResults.length > 0) {
       const rarities = gachaTenResults.map(r => r.rarity);
       const ssrCount = rarities.filter(r => r === 'SSR').length;
       const srCount = rarities.filter(r => r === 'SR').length;
-      setShareMessage(`10連ガチャ結果: SSR×${ssrCount}, SR×${srCount}枚！🎰✨`);
+      const rCount = rarities.filter(r => r === 'R').length;
+      const nCount = rarities.filter(r => r === 'N').length;
+      setShareMessage(`🎰 Hirsakam 10連ガチャ結果
+SSR: ${ssrCount}枚
+SR: ${srCount}枚  
+R: ${rCount}枚
+N: ${nCount}枚`);
     } else if (type === 'generated') {
       setShareMessage(`Hirsakam Icon Generator で画像を生成しました！🎨✨`);
       setShareImageUrl(imageUrl);
@@ -1068,8 +1075,8 @@ function App() {
   };
 
   const shareToSlack = async () => {
-    if (!shareChannel.trim() || !shareMessage.trim()) {
-      setShareResult({ success: false, message: 'チャンネル名とメッセージを入力してください' });
+    if (!shareChannel.trim()) {
+      setShareResult({ success: false, message: 'チャンネル名を入力してください' });
       return;
     }
 
@@ -3214,15 +3221,13 @@ function App() {
                 </div>
                 
                 <div className="form-group">
-                  <label htmlFor="shareMessage">メッセージ:</label>
+                  <label htmlFor="shareMessage">投稿メッセージ（自動生成）:</label>
                   <textarea
                     id="shareMessage"
                     value={shareMessage}
-                    onChange={(e) => setShareMessage(e.target.value)}
-                    placeholder="ガチャ結果をシェア！"
-                    className="text-input"
-                    rows="3"
-                    disabled={isSharing}
+                    readOnly
+                    className="text-input readonly-message"
+                    rows="5"
                   />
                 </div>
 
@@ -3235,7 +3240,7 @@ function App() {
                 <div className="share-buttons">
                   <button
                     onClick={shareToSlack}
-                    disabled={isSharing || !shareChannel.trim() || !shareMessage.trim()}
+                    disabled={isSharing || !shareChannel.trim()}
                     className={`preview-button-single ${isSharing ? 'sharing' : ''}`}
                   >
                     {isSharing ? '📤 送信中...' : '📤 Slackに投稿'}

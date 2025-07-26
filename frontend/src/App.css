@@ -414,6 +414,13 @@ textarea.text-input {
   background: #5a4fcf;
 }
 
+.readonly-message {
+  background-color: #f8f9fa !important;
+  color: #495057 !important;
+  cursor: default !important;
+  border-color: #e9ecef !important;
+}
+
 .gallery-section {
   background: white;
   border-radius: 15px;
