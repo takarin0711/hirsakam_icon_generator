@@ -15,6 +15,13 @@ import shutil
 from hirsakam_icon_generator import HirsakamGenerator
 import uuid
 import uvicorn
+# rembgインポート（透過処理用）
+try:
+    from rembg import remove
+    REMBG_AVAILABLE = True
+except ImportError:
+    REMBG_AVAILABLE = False
+    print("Warning: rembg library not available. Background removal feature will be disabled.")
 # 統一された環境変数ファイルを読み込み（python-dotenv不要版）
 def load_env_file():
     """統一された環境変数ファイルを読み込み"""
@@ -879,6 +886,77 @@ async def share_generated_image_to_slack(
         raise HTTPException(status_code=500, detail="Slack送信がタイムアウトしました")
     except Exception as e:
         print(f"Slack送信エラー: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/remove-background")
+async def remove_background_preview(
+    image: UploadFile = File(...)
+):
+    """
+    プレビュー用背景透過処理
+    """
+    try:
+        if not REMBG_AVAILABLE:
+            raise HTTPException(status_code=500, detail="背景透過機能が利用できません。rembgライブラリがインストールされていません。")
+        
+        # アップロードされた画像を一時保存
+        temp_id = str(uuid.uuid4())
+        temp_input_path = os.path.join(UPLOAD_DIR, f"temp_input_{temp_id}.png")
+        temp_output_path = os.path.join(UPLOAD_DIR, f"temp_output_{temp_id}.png")
+        
+        # ファイルを保存
+        with open(temp_input_path, "wb") as buffer:
+            shutil.copyfileobj(image.file, buffer)
+        
+        print(f"背景透過処理開始: {temp_input_path}")
+        
+        # rembgで背景透過処理
+        from rembg import remove
+        with open(temp_input_path, 'rb') as input_file:
+            input_data = input_file.read()
+        
+        # 背景除去実行
+        output_data = remove(input_data)
+        
+        # 処理済み画像を保存
+        with open(temp_output_path, 'wb') as output_file:
+            output_file.write(output_data)
+        
+        print(f"背景透過処理完了: {temp_output_path}")
+        
+        # レスポンス用のクリーンアップ関数
+        from starlette.background import BackgroundTask
+        def cleanup_files():
+            try:
+                if os.path.exists(temp_input_path):
+                    os.remove(temp_input_path)
+                if os.path.exists(temp_output_path):
+                    os.remove(temp_output_path)
+                print(f"一時ファイルを削除: {temp_input_path}, {temp_output_path}")
+            except Exception as e:
+                print(f"一時ファイル削除エラー: {e}")
+        
+        # 処理済み画像を返す
+        response = FileResponse(
+            path=temp_output_path,
+            filename=f"transparent_{temp_id}.png",
+            media_type='image/png',
+            background=BackgroundTask(cleanup_files)
+        )
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "POST"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        
+        return response
+        
+    except Exception as e:
+        # エラー時も一時ファイルを削除
+        if 'temp_input_path' in locals() and os.path.exists(temp_input_path):
+            os.remove(temp_input_path)
+        if 'temp_output_path' in locals() and os.path.exists(temp_output_path):
+            os.remove(temp_output_path)
+        
+        print(f"背景透過処理エラー: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

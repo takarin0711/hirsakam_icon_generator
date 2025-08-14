@@ -354,8 +354,8 @@ function App() {
           // 背景透過フラグが変更された場合、透過処理されたURLを生成
           if (updates.hasOwnProperty('removeBackground')) {
             if (updates.removeBackground) {
-              // 背景透過処理を適用（簡易版）
-              processBackgroundRemoval(updated);
+              // バックエンドAPIで背景透過処理を適用
+              processBackgroundRemovalAPI(updated);
             } else {
               // 元の画像に戻す
               updated.displayUrl = updated.url;
@@ -368,79 +368,73 @@ function App() {
     );
   };
 
-  // 簡易背景透過処理（プレビュー用）
-  const processBackgroundRemoval = async (overlay) => {
+  // API背景透過処理（プレビュー用）
+  const processBackgroundRemovalAPI = async (overlay) => {
     try {
-      // Canvas を使って簡易的な背景透過処理
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
+      // getApiBaseUrl 関数を実装
+      const getApiBaseUrl = () => {
+        const serverUrl = process.env.REACT_APP_SERVER_URL || window.location.protocol + '//' + window.location.hostname;
+        return `${serverUrl}:8000`;
+      };
       
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
+      // 元画像をBlobに変換
+      const response = await fetch(overlay.url);
+      const blob = await response.blob();
+      
+      // FormDataを作成
+      const formData = new FormData();
+      formData.append('image', blob, 'overlay.png');
+      
+      // バックエンドAPIに送信
+      const apiResponse = await fetch(`${getApiBaseUrl()}/remove-background`, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!apiResponse.ok) {
+        throw new Error(`API error: ${apiResponse.status}`);
+      }
+      
+      // レスポンスをBlobとして取得
+      const processedBlob = await apiResponse.blob();
+      const processedUrl = URL.createObjectURL(processedBlob);
+      
+      // 水平反転が有効な場合はCanvasで処理
+      if (overlay.flipHorizontal) {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
         
-        canvas.width = img.width;
-        canvas.height = img.height;
-        
-        // 水平反転が有効な場合は変換を適用
-        if (overlay.flipHorizontal) {
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          canvas.width = img.width;
+          canvas.height = img.height;
+          
+          // 水平反転を適用
           ctx.scale(-1, 1);
           ctx.translate(-canvas.width, 0);
-        }
-        
-        ctx.drawImage(img, 0, 0);
-        
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data = imageData.data;
-        
-        // 簡易的な背景透過処理（エッジの色を基準に）
-        const corners = [
-          [0, 0], // 左上
-          [canvas.width - 1, 0], // 右上
-          [0, canvas.height - 1], // 左下
-          [canvas.width - 1, canvas.height - 1] // 右下
-        ];
-        
-        // コーナーの色を取得して背景色を推定
-        const bgColors = corners.map(([x, y]) => {
-          const index = (y * canvas.width + x) * 4;
-          return [data[index], data[index + 1], data[index + 2]];
-        });
-        
-        // 最も多い色を背景色とする（簡易版）
-        const bgColor = bgColors[0]; // 左上の色を背景色とする
-        
-        // 色の閾値
-        const threshold = 30;
-        
-        // 各ピクセルをチェックして背景色に近い場合は透明にする
-        for (let i = 0; i < data.length; i += 4) {
-          const r = data[i];
-          const g = data[i + 1];
-          const b = data[i + 2];
+          ctx.drawImage(img, 0, 0);
           
-          // 背景色との差を計算
-          const diff = Math.abs(r - bgColor[0]) + Math.abs(g - bgColor[1]) + Math.abs(b - bgColor[2]);
+          // 処理済み画像のURLを生成
+          const flippedUrl = canvas.toDataURL('image/png');
           
-          if (diff < threshold) {
-            data[i + 3] = 0; // アルファチャンネルを0（透明）にする
-          }
-        }
+          // オーバーレイ画像を更新
+          setOverlayImages(prev => 
+            prev.map(img => 
+              img.id === overlay.id 
+                ? { ...img, displayUrl: flippedUrl }
+                : img
+            )
+          );
+          
+          // 古いURLをクリーンアップ
+          URL.revokeObjectURL(processedUrl);
+        };
         
-        // 背景透過処理後のイメージデータを再描画
-        // 新しいキャンバスを作成して処理済みの画像を描画
-        const finalCanvas = document.createElement('canvas');
-        const finalCtx = finalCanvas.getContext('2d');
-        
-        finalCanvas.width = img.width;
-        finalCanvas.height = img.height;
-        
-        finalCtx.putImageData(imageData, 0, 0);
-        
-        // 処理済み画像のURLを生成
-        const processedUrl = finalCanvas.toDataURL('image/png');
-        
-        // オーバーレイ画像を更新
+        img.src = processedUrl;
+      } else {
+        // 水平反転なしの場合は直接使用
         setOverlayImages(prev => 
           prev.map(img => 
             img.id === overlay.id 
@@ -448,11 +442,10 @@ function App() {
               : img
           )
         );
-      };
+      }
       
-      img.src = overlay.url;
     } catch (error) {
-      console.error('Background removal error:', error);
+      console.error('Background removal API error:', error);
       // エラーの場合は元の画像を使用
       setOverlayImages(prev => 
         prev.map(img => 
@@ -2000,9 +1993,6 @@ N: ${nCount}枚`);
                             />
                             背景を透過する
                           </label>
-                          <small style={{ color: '#666', fontSize: '11px', display: 'block', marginTop: '4px' }}>
-                            ※プレビューは簡易版、生成時は高精度処理
-                          </small>
                         </div>
                         <div className="overlay-opacity-control">
                           <label>
