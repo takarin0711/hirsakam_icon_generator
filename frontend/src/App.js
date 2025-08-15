@@ -53,9 +53,11 @@ function App() {
     historyIndexRef.current = historyIndex;
   }, [drawingHistory, historyIndex]);
   
-  // Overlay image states
-  const [overlayImages, setOverlayImages] = useState([]);
-  const [selectedOverlayIndex, setSelectedOverlayIndex] = useState(-1);
+  // Overlay image states (3つの独立したスロット)
+  const [overlaySlot1, setOverlaySlot1] = useState(null);
+  const [overlaySlot2, setOverlaySlot2] = useState(null);
+  const [overlaySlot3, setOverlaySlot3] = useState(null);
+  const [selectedOverlaySlot, setSelectedOverlaySlot] = useState(null); // 'slot1', 'slot2', 'slot3'
   const [isOverlayDragging, setIsOverlayDragging] = useState(false);
   const [isOverlayResizing, setIsOverlayResizing] = useState(false);
   const [isRotating, setIsRotating] = useState(false);
@@ -67,7 +69,7 @@ function App() {
   const [imageCompressionInfo, setImageCompressionInfo] = useState(null);
   
   // レイヤー順序管理
-  const [layerOrder, setLayerOrder] = useState(['text', 'emoji', 'overlay']); // ベース画像が最下位、フリーハンド描画が最上位（固定）
+  const [layerOrder, setLayerOrder] = useState(['text', 'emoji', 'overlay1', 'overlay2', 'overlay3']); // ベース画像が最下位、フリーハンド描画が最上位（固定）
   const [showLayerPanel, setShowLayerPanel] = useState(false);
   const [isDraggingLayer, setIsDraggingLayer] = useState(false);
   const [draggedLayerIndex, setDraggedLayerIndex] = useState(-1);
@@ -173,8 +175,22 @@ function App() {
     switch (layerType) {
       case 'text': return 'テキスト';
       case 'emoji': return '絵文字';
-      case 'overlay': return 'オーバーレイ画像';
+      case 'overlay1': return 'オーバーレイ画像 1';
+      case 'overlay2': return 'オーバーレイ画像 2';
+      case 'overlay3': return 'オーバーレイ画像 3';
       default: return layerType;
+    }
+  };
+
+  // レイヤーにコンテンツがあるかどうかをチェックする関数
+  const hasLayerContent = (layerType) => {
+    switch (layerType) {
+      case 'text': return formData.text && formData.text.trim() !== '';
+      case 'emoji': return formData.emoji && formData.emoji.trim() !== '';
+      case 'overlay1': return overlaySlot1 !== null;
+      case 'overlay2': return overlaySlot2 !== null;
+      case 'overlay3': return overlaySlot3 !== null;
+      default: return false;
     }
   };
 
@@ -276,7 +292,7 @@ function App() {
     });
   };
 
-  const handleOverlayImageUpload = async (e) => {
+  const handleOverlayImageUpload = async (e, slotNumber) => {
     const file = e.target.files[0];
     if (file) {
       try {
@@ -309,22 +325,32 @@ function App() {
           }
           
           const newOverlay = {
-            id: Date.now(),
+            id: Date.now() + slotNumber, // スロット番号を含めてユニークにする
             file: processedFile,
             url: URL.createObjectURL(processedFile),
             displayUrl: URL.createObjectURL(processedFile), // プレビュー用URL（初期値は元画像）
-            x: 200,
-            y: 150,
+            x: 200 + (slotNumber - 1) * 30, // スロットごとに少しずらす
+            y: 150 + (slotNumber - 1) * 30,
             width: width,
             height: height,
             originalWidth: img.width,
             originalHeight: img.height,
             opacity: 1,
             rotation: 0,
-            removeBackground: false
+            removeBackground: false,
+            flipHorizontal: false
           };
-          setOverlayImages(prev => [...prev, newOverlay]);
-          setSelectedOverlayIndex(overlayImages.length);
+          
+          // 対応するスロットにセット
+          if (slotNumber === 1) {
+            setOverlaySlot1(newOverlay);
+          } else if (slotNumber === 2) {
+            setOverlaySlot2(newOverlay);
+          } else if (slotNumber === 3) {
+            setOverlaySlot3(newOverlay);
+          }
+          
+          setSelectedOverlaySlot(`slot${slotNumber}`);
         };
         img.src = URL.createObjectURL(processedFile);
       } catch (error) {
@@ -334,42 +360,73 @@ function App() {
     }
   };
 
-  const removeOverlayImage = (index) => {
-    setOverlayImages(prev => {
-      const newImages = prev.filter((_, i) => i !== index);
-      if (selectedOverlayIndex === index) {
-        setSelectedOverlayIndex(-1);
-      } else if (selectedOverlayIndex > index) {
-        setSelectedOverlayIndex(prev => prev - 1);
-      }
-      return newImages;
-    });
+  const removeOverlayImage = (slotNumber) => {
+    if (slotNumber === 1) {
+      setOverlaySlot1(null);
+    } else if (slotNumber === 2) {
+      setOverlaySlot2(null);
+    } else if (slotNumber === 3) {
+      setOverlaySlot3(null);
+    }
+    
+    if (selectedOverlaySlot === `slot${slotNumber}`) {
+      setSelectedOverlaySlot(null);
+    }
   };
 
-  const updateOverlayImage = (index, updates) => {
-    setOverlayImages(prev => 
-      prev.map((img, i) => {
-        if (i === index) {
-          const updated = { ...img, ...updates };
-          // 背景透過フラグが変更された場合、透過処理されたURLを生成
-          if (updates.hasOwnProperty('removeBackground')) {
-            if (updates.removeBackground) {
-              // バックエンドAPIで背景透過処理を適用
-              processBackgroundRemovalAPI(updated);
-            } else {
-              // 元の画像に戻す
-              updated.displayUrl = updated.url;
-            }
-          }
-          return updated;
+  const updateOverlayImage = (slotNumber, updates) => {
+    const updateSlot = (prevOverlay) => {
+      if (!prevOverlay) return null;
+      
+      const updated = { ...prevOverlay, ...updates };
+      // 背景透過フラグが変更された場合、透過処理されたURLを生成
+      if (updates.hasOwnProperty('removeBackground')) {
+        if (updates.removeBackground) {
+          // バックエンドAPIで背景透過処理を適用
+          processBackgroundRemovalAPI(updated, slotNumber);
+        } else {
+          // 元の画像に戻す
+          updated.displayUrl = updated.url;
         }
-        return img;
-      })
-    );
+      }
+      return updated;
+    };
+    
+    if (slotNumber === 1) {
+      setOverlaySlot1(updateSlot);
+    } else if (slotNumber === 2) {
+      setOverlaySlot2(updateSlot);
+    } else if (slotNumber === 3) {
+      setOverlaySlot3(updateSlot);
+    }
+  };
+
+  // スロット更新ヘルパー関数
+  const updateOverlaySlot = (slotNumber, updates) => {
+    if (slotNumber === 1) {
+      setOverlaySlot1(prev => prev ? { ...prev, ...updates } : null);
+    } else if (slotNumber === 2) {
+      setOverlaySlot2(prev => prev ? { ...prev, ...updates } : null);
+    } else if (slotNumber === 3) {
+      setOverlaySlot3(prev => prev ? { ...prev, ...updates } : null);
+    }
+  };
+
+  // 全スロットを配列として取得するヘルパー関数
+  const getAllOverlaySlots = () => {
+    return [overlaySlot1, overlaySlot2, overlaySlot3].filter(slot => slot !== null);
+  };
+
+  // スロット番号でオーバーレイデータを取得するヘルパー関数
+  const getOverlayBySlot = (slotNumber) => {
+    if (slotNumber === 1) return overlaySlot1;
+    if (slotNumber === 2) return overlaySlot2;
+    if (slotNumber === 3) return overlaySlot3;
+    return null;
   };
 
   // API背景透過処理（プレビュー用）
-  const processBackgroundRemovalAPI = async (overlay) => {
+  const processBackgroundRemovalAPI = async (overlay, slotNumber) => {
     try {
       // getApiBaseUrl 関数を実装
       const getApiBaseUrl = () => {
@@ -420,13 +477,7 @@ function App() {
           const flippedUrl = canvas.toDataURL('image/png');
           
           // オーバーレイ画像を更新
-          setOverlayImages(prev => 
-            prev.map(img => 
-              img.id === overlay.id 
-                ? { ...img, displayUrl: flippedUrl }
-                : img
-            )
-          );
+          updateOverlaySlot(slotNumber, { displayUrl: flippedUrl });
           
           // 古いURLをクリーンアップ
           URL.revokeObjectURL(processedUrl);
@@ -435,25 +486,13 @@ function App() {
         img.src = processedUrl;
       } else {
         // 水平反転なしの場合は直接使用
-        setOverlayImages(prev => 
-          prev.map(img => 
-            img.id === overlay.id 
-              ? { ...img, displayUrl: processedUrl }
-              : img
-          )
-        );
+        updateOverlaySlot(slotNumber, { displayUrl: processedUrl });
       }
       
     } catch (error) {
       console.error('Background removal API error:', error);
       // エラーの場合は元の画像を使用
-      setOverlayImages(prev => 
-        prev.map(img => 
-          img.id === overlay.id 
-            ? { ...img, displayUrl: img.url }
-            : img
-        )
-      );
+      updateOverlaySlot(slotNumber, { displayUrl: overlay.url });
     }
   };
 
@@ -701,8 +740,9 @@ function App() {
       centerY = emojiPosition.y;
       currentRotation = emojiRotation;
     } else if (typeof elementType === 'number') {
-      // オーバーレイ画像
-      const overlay = overlayImages[elementType];
+      // オーバーレイ画像 - スロット番号で取得
+      const overlay = getOverlayBySlot(elementType);
+      if (!overlay) return; // オーバーレイが存在しない場合は処理を中断
       centerX = overlay.x;
       centerY = overlay.y;
       currentRotation = overlay.rotation || 0;
@@ -1234,7 +1274,7 @@ N: ${nCount}枚`);
       setTextBounds(bounds);
     }
     // プレビュー開始時はオーバーレイの選択をクリア
-    setSelectedOverlayIndex(-1);
+    setSelectedOverlaySlot(null);
     // キャンバス準備状態をリセット
     setCanvasReady(false);
     setPreviewMode(true);
@@ -1280,20 +1320,20 @@ N: ${nCount}枚`);
     // テキスト/絵文字操作時はオーバーレイ操作状態をクリアしない
     // setIsOverlayDragging(false);
     // setIsOverlayResizing(false);
-    // setSelectedOverlayIndex(-1);
+    // setSelectedOverlaySlot(null);
     setResizeDirection(direction);
     setInitialMousePos({ x: e.clientX, y: e.clientY });
     setInitialSize(activeElement === 'emoji' ? formData.emojiSize : formData.fontSize);
   };
 
-  const handleOverlayMouseDown = (e, overlayIndex) => {
+  const handleOverlayMouseDown = (e, slotNumber) => {
     if (!previewMode) return;
     
     e.preventDefault();
     e.stopPropagation();
     
     
-    setSelectedOverlayIndex(overlayIndex);
+    setSelectedOverlaySlot(`slot${slotNumber}`);
     setActiveElement(null); // テキスト・絵文字の選択を解除
     setIsOverlayDragging(true);
     setIsOverlayResizing(false); // リサイズ状態をクリア
@@ -1301,38 +1341,39 @@ N: ${nCount}枚`);
     const canvasRect = previewRef.current.getBoundingClientRect();
     const x = e.clientX - canvasRect.left;
     const y = e.clientY - canvasRect.top;
-    const overlay = overlayImages[overlayIndex];
+    const overlay = slotNumber === 1 ? overlaySlot1 : slotNumber === 2 ? overlaySlot2 : overlaySlot3;
     
     setDragOffset({ x: x - overlay.x, y: y - overlay.y });
   };
 
-  const handleOverlayResizeMouseDown = (e, overlayIndex, direction) => {
+  const handleOverlayResizeMouseDown = (e, slotNumber, direction) => {
     if (!previewMode) return;
     
     e.preventDefault();
     e.stopPropagation();
     
-    setSelectedOverlayIndex(overlayIndex);
+    setSelectedOverlaySlot(`slot${slotNumber}`);
     setIsOverlayResizing(true);
     setIsOverlayDragging(false); // ドラッグ状態をクリア
     setResizeDirection(direction);
     setInitialMousePos({ x: e.clientX, y: e.clientY });
     
-    const overlay = overlayImages[overlayIndex];
+    const overlay = slotNumber === 1 ? overlaySlot1 : slotNumber === 2 ? overlaySlot2 : overlaySlot3;
     setInitialSize(overlay.width);
   };
 
   const handleMouseMove = (e) => {
     if (!previewMode) return;
     
-    if (isOverlayDragging && selectedOverlayIndex >= 0 && previewRef.current) {
+    if (isOverlayDragging && selectedOverlaySlot && previewRef.current) {
       const rect = previewRef.current.getBoundingClientRect();
       const x = e.clientX - rect.left - dragOffset.x;
       const y = e.clientY - rect.top - dragOffset.y;
       
       // 境界制限を削除して自由に移動可能に
-      updateOverlayImage(selectedOverlayIndex, { x: x, y: y });
-    } else if (isOverlayResizing && selectedOverlayIndex >= 0) {
+      const slotNumber = parseInt(selectedOverlaySlot.replace('slot', ''));
+      updateOverlayImage(slotNumber, { x: x, y: y });
+    } else if (isOverlayResizing && selectedOverlaySlot) {
       const deltaX = e.clientX - initialMousePos.x;
       const deltaY = e.clientY - initialMousePos.y;
       
@@ -1357,7 +1398,8 @@ N: ${nCount}枚`);
           sizeDelta = (deltaX + deltaY) / 1.5;
       }
       
-      const currentOverlay = overlayImages[selectedOverlayIndex];
+      const slotNumber = parseInt(selectedOverlaySlot.replace('slot', ''));
+      const currentOverlay = slotNumber === 1 ? overlaySlot1 : slotNumber === 2 ? overlaySlot2 : overlaySlot3;
       // 元の画像のアスペクト比を使用（より正確）
       const aspectRatio = currentOverlay.originalHeight && currentOverlay.originalWidth 
         ? currentOverlay.originalHeight / currentOverlay.originalWidth 
@@ -1365,7 +1407,7 @@ N: ${nCount}枚`);
       const newWidth = Math.max(20, Math.min(500, initialSize + sizeDelta));
       const newHeight = newWidth * aspectRatio;
       
-      updateOverlayImage(selectedOverlayIndex, { 
+      updateOverlayImage(slotNumber, { 
         width: newWidth, 
         height: newHeight 
       });
@@ -1483,7 +1525,7 @@ N: ${nCount}枚`);
   const generateIcon = async () => {
     // 描画データがあるかチェック
     const hasDrawing = drawingCanvasRef.current && drawingHistory.length > 1; // 初期状態以外の履歴がある
-    const hasOverlays = overlayImages.length > 0;
+    const hasOverlays = getAllOverlaySlots().length > 0;
     
     if (!formData.text && !formData.emoji && !hasDrawing && !hasOverlays) {
       alert('テキスト、絵文字、描画、またはオーバーレイ画像のいずれかを入力してください');
@@ -1531,8 +1573,12 @@ N: ${nCount}枚`);
       }
 
       // オーバーレイ画像データがある場合は送信
-      if (overlayImages.length > 0) {
-        const overlayData = await Promise.all(overlayImages.map(async (overlay) => {
+      const allOverlaySlots = getAllOverlaySlots();
+      if (allOverlaySlots.length > 0) {
+        const overlayData = await Promise.all(allOverlaySlots.map(async (overlay) => {
+          // スロット番号を特定
+          const slotNumber = overlaySlot1 === overlay ? 1 : overlaySlot2 === overlay ? 2 : 3;
+          
           // 画像をbase64に変換
           const response = await fetch(overlay.url);
           const blob = await response.blob();
@@ -1541,6 +1587,7 @@ N: ${nCount}枚`);
           return new Promise((resolve) => {
             reader.onload = () => {
               resolve({
+                slotNumber: slotNumber, // スロット番号を追加
                 data: reader.result, // base64 data URL
                 x: Math.round(overlay.x * imageScale),
                 y: Math.round(overlay.y * imageScale),
@@ -1815,7 +1862,7 @@ N: ${nCount}枚`);
         setIsOverlayResizing(false);
         setResizeDirection('');
         // オーバーレイの選択状態は維持する（リサイズハンドルを表示し続けるため）
-        // setSelectedOverlayIndex(-1);
+        // setSelectedOverlaySlot(null);
       }
       if (isRotating) {
         handleRotationEnd();
@@ -1831,7 +1878,7 @@ N: ${nCount}枚`);
         document.removeEventListener('mouseup', handleGlobalMouseUp);
       };
     }
-  }, [previewMode, isDragging, isResizing, isOverlayDragging, isOverlayResizing, isRotating, dragOffset, initialMousePos, initialSize, selectedOverlayIndex, formData, overlayImages]);
+  }, [previewMode, isDragging, isResizing, isOverlayDragging, isOverlayResizing, isRotating, dragOffset, initialMousePos, initialSize, selectedOverlaySlot, formData, overlaySlot1, overlaySlot2, overlaySlot3]);
 
   return (
     <div className="App">
@@ -1879,24 +1926,24 @@ N: ${nCount}枚`);
               </button>
             </div>
 
-            <div className="form-group">
-              <label>オーバーレイ画像:</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleOverlayImageUpload}
-                className="file-input"
-                multiple={false}
-              />
-              
-              {overlayImages.length > 0 && (
-                <div className="overlay-images-list">
-                  <h4>追加された画像:</h4>
-                  {overlayImages.map((overlay, index) => (
-                    <div key={overlay.id} className="overlay-item">
+            {/* 3つの独立したオーバーレイスロット */}
+            {[1, 2, 3].map(slotNumber => {
+              const overlay = slotNumber === 1 ? overlaySlot1 : slotNumber === 2 ? overlaySlot2 : overlaySlot3;
+              return (
+                <div key={slotNumber} className="form-group overlay-slot">
+                  <label>オーバーレイ画像 {slotNumber}:</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleOverlayImageUpload(e, slotNumber)}
+                    className="file-input"
+                  />
+                  
+                  {overlay && (
+                    <div className="overlay-item">
                       <img 
                         src={overlay.url} 
-                        alt={`Overlay ${index + 1}`}
+                        alt={`Overlay ${slotNumber}`}
                         className="overlay-thumbnail"
                       />
                       <div className="overlay-controls">
@@ -1907,7 +1954,7 @@ N: ${nCount}枚`);
                               <input
                                 type="number"
                                 value={Math.round(overlay.x)}
-                                onChange={(e) => updateOverlayImage(index, { x: parseInt(e.target.value) || 0 })}
+                                onChange={(e) => updateOverlayImage(slotNumber, { x: parseInt(e.target.value) || 0 })}
                                 className="number-input overlay-input"
                               />
                             </div>
@@ -1916,7 +1963,7 @@ N: ${nCount}枚`);
                               <input
                                 type="number"
                                 value={Math.round(overlay.y)}
-                                onChange={(e) => updateOverlayImage(index, { y: parseInt(e.target.value) || 0 })}
+                                onChange={(e) => updateOverlayImage(slotNumber, { y: parseInt(e.target.value) || 0 })}
                                 className="number-input overlay-input"
                               />
                             </div>
@@ -1932,7 +1979,7 @@ N: ${nCount}枚`);
                                   const aspectRatio = overlay.originalHeight && overlay.originalWidth 
                                     ? overlay.originalHeight / overlay.originalWidth 
                                     : overlay.height / overlay.width;
-                                  updateOverlayImage(index, { 
+                                  updateOverlayImage(slotNumber, { 
                                     width: newWidth, 
                                     height: newWidth * aspectRatio 
                                   });
@@ -1950,7 +1997,7 @@ N: ${nCount}枚`);
                                   const aspectRatio = overlay.originalWidth && overlay.originalHeight 
                                     ? overlay.originalWidth / overlay.originalHeight 
                                     : overlay.width / overlay.height;
-                                  updateOverlayImage(index, { 
+                                  updateOverlayImage(slotNumber, { 
                                     height: newHeight, 
                                     width: newHeight * aspectRatio 
                                   });
@@ -1968,7 +2015,7 @@ N: ${nCount}枚`);
                             max="1"
                             step="0.1"
                             value={overlay.opacity}
-                            onChange={(e) => updateOverlayImage(index, { opacity: parseFloat(e.target.value) })}
+                            onChange={(e) => updateOverlayImage(slotNumber, { opacity: parseFloat(e.target.value) })}
                             className="opacity-slider"
                           />
                         </div>
@@ -1979,7 +2026,7 @@ N: ${nCount}枚`);
                             min="-180"
                             max="180"
                             value={overlay.rotation || 0}
-                            onChange={(e) => updateOverlayImage(index, { rotation: parseInt(e.target.value) })}
+                            onChange={(e) => updateOverlayImage(slotNumber, { rotation: parseInt(e.target.value) })}
                             className="opacity-slider"
                           />
                         </div>
@@ -1988,7 +2035,7 @@ N: ${nCount}枚`);
                             <input
                               type="checkbox"
                               checked={overlay.removeBackground || false}
-                              onChange={(e) => updateOverlayImage(index, { removeBackground: e.target.checked })}
+                              onChange={(e) => updateOverlayImage(slotNumber, { removeBackground: e.target.checked })}
                               style={{ marginRight: '8px' }}
                             />
                             背景を透過する
@@ -1999,24 +2046,24 @@ N: ${nCount}枚`);
                             <input
                               type="checkbox"
                               checked={overlay.flipHorizontal || false}
-                              onChange={(e) => updateOverlayImage(index, { flipHorizontal: e.target.checked })}
+                              onChange={(e) => updateOverlayImage(slotNumber, { flipHorizontal: e.target.checked })}
                               style={{ marginRight: '8px' }}
                             />
                             左右反転
                           </label>
                         </div>
                         <button
-                          onClick={() => removeOverlayImage(index)}
+                          onClick={() => removeOverlayImage(slotNumber)}
                           className="remove-overlay-button"
                         >
                           削除
                         </button>
                       </div>
                     </div>
-                  ))}
+                  )}
                 </div>
-              )}
-            </div>
+              );
+            })}
 
             <div className="text-emoji-section">
               <h3>テキスト設定</h3>
@@ -2331,7 +2378,7 @@ N: ${nCount}枚`);
                     
                     // 背景をクリックした時（他の要素で stopPropagation されていない場合）
                     if (e.target === e.currentTarget || e.target.classList.contains('base-preview-image')) {
-                      setSelectedOverlayIndex(-1);
+                      setSelectedOverlaySlot(null);
                     }
                   }}
                 >
@@ -2461,7 +2508,7 @@ N: ${nCount}枚`);
                       onMouseDown={(e) => {
                         e.stopPropagation();
                         setActiveElement('text');
-                        setSelectedOverlayIndex(-1); // オーバーレイの選択を解除
+                        setSelectedOverlaySlot(null); // オーバーレイの選択を解除
                         handleMouseDown(e, 'text');
                       }}
                     >
@@ -2549,7 +2596,7 @@ N: ${nCount}枚`);
                       onMouseDown={(e) => {
                         e.stopPropagation();
                         setActiveElement('emoji');
-                        setSelectedOverlayIndex(-1); // オーバーレイの選択を解除
+                        setSelectedOverlaySlot(null); // オーバーレイの選択を解除
                         handleMouseDown(e, 'emoji');
                       }}
                     >
@@ -2632,7 +2679,11 @@ N: ${nCount}枚`);
                   )}
 
                   {/* Overlay Images */}
-                  {overlayImages.map((overlay, index) => (
+                  {getAllOverlaySlots().map((overlay, index) => {
+                    // スロット番号を特定
+                    const slotNumber = overlaySlot1 === overlay ? 1 : overlaySlot2 === overlay ? 2 : 3;
+                    const isSelected = selectedOverlaySlot === `slot${slotNumber}`;
+                    return (
                     <div
                       key={overlay.id}
                       className="overlay-image-container"
@@ -2642,23 +2693,23 @@ N: ${nCount}枚`);
                         top: overlay.y - overlay.height / 2,
                         width: overlay.width,
                         height: overlay.height,
-                        cursor: drawingMode ? 'default' : (selectedOverlayIndex === index && (isOverlayDragging || isOverlayResizing) ? 'grabbing' : 'grab'),
+                        cursor: drawingMode ? 'default' : (isSelected && (isOverlayDragging || isOverlayResizing) ? 'grabbing' : 'grab'),
                         userSelect: 'none',
                         pointerEvents: drawingMode ? 'none' : 'auto',
-                        zIndex: getLayerZIndex('overlay'),
-                        border: selectedOverlayIndex === index ? '2px dashed rgba(102, 126, 234, 0.8)' : '2px dashed rgba(102, 126, 234, 0.3)',
+                        zIndex: getLayerZIndex(`overlay${slotNumber}`),
+                        border: isSelected ? '2px dashed rgba(102, 126, 234, 0.8)' : '2px dashed rgba(102, 126, 234, 0.3)',
                         borderRadius: '4px'
                       }}
                       onMouseDown={(e) => {
                         if (!drawingMode) {
                           e.stopPropagation();
-                          handleOverlayMouseDown(e, index);
+                          handleOverlayMouseDown(e, slotNumber);
                         }
                       }}
                     >
                       <img
                         src={overlay.displayUrl || overlay.url}
-                        alt={`Overlay ${index + 1}`}
+                        alt={`Overlay Slot ${slotNumber}`}
                         style={{
                           width: '100%',
                           height: '100%',
@@ -2673,48 +2724,49 @@ N: ${nCount}枚`);
                       />
                       
                       {/* Resize handles for selected overlay */}
-                      {selectedOverlayIndex === index && !drawingMode && (
+                      {isSelected && !drawingMode && (
                         <>
                           <div 
                             className="resize-handle corner-nw"
                             onMouseDown={(e) => {
                               e.stopPropagation();
-                              handleOverlayResizeMouseDown(e, index, 'nw');
+                              handleOverlayResizeMouseDown(e, slotNumber, 'nw');
                             }}
                           />
                           <div 
                             className="resize-handle corner-ne"
                             onMouseDown={(e) => {
                               e.stopPropagation();
-                              handleOverlayResizeMouseDown(e, index, 'ne');
+                              handleOverlayResizeMouseDown(e, slotNumber, 'ne');
                             }}
                           />
                           <div 
                             className="resize-handle corner-sw"
                             onMouseDown={(e) => {
                               e.stopPropagation();
-                              handleOverlayResizeMouseDown(e, index, 'sw');
+                              handleOverlayResizeMouseDown(e, slotNumber, 'sw');
                             }}
                           />
                           <div 
                             className="resize-handle corner-se"
                             onMouseDown={(e) => {
                               e.stopPropagation();
-                              handleOverlayResizeMouseDown(e, index, 'se');
+                              handleOverlayResizeMouseDown(e, slotNumber, 'se');
                             }}
                           />
                           <div 
                             className="rotation-handle"
                             onMouseDown={(e) => {
                               e.stopPropagation();
-                              handleRotationStart(e, index);
+                              handleRotationStart(e, slotNumber);
                             }}
                             title="ドラッグして回転"
                           />
                         </>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <div className="preview-controls">
                   <button 
@@ -3043,7 +3095,9 @@ N: ${nCount}枚`);
                   const hasContent = 
                     (layerType === 'text' && formData.text) ||
                     (layerType === 'emoji' && formData.emoji) ||
-                    (layerType === 'overlay' && overlayImages.length > 0);
+                    (layerType === 'overlay1' && overlaySlot1) ||
+                    (layerType === 'overlay2' && overlaySlot2) ||
+                    (layerType === 'overlay3' && overlaySlot3);
                   
                   // すべてのレイヤータイプはドラッグ可能（空でも順序変更のため）
                   const isDraggable = true;
@@ -3059,7 +3113,13 @@ N: ${nCount}枚`);
                       onDragEnd={handleLayerDragEnd}
                     >
                       <span className="layer-icon">
-                        {layerType === 'text' ? '📝' : layerType === 'emoji' ? '😀' : '🖼️'}
+                        {
+                          layerType === 'text' ? '📝' : 
+                          layerType === 'emoji' ? '😀' : 
+                          layerType === 'overlay1' ? '🖼️' :
+                          layerType === 'overlay2' ? '🖼️' :
+                          layerType === 'overlay3' ? '🖼️' : '🖼️'
+                        }
                       </span>
                       <span className="layer-name">{getLayerName(layerType)}</span>
                       {!hasContent && <span className="layer-status">（空）</span>}
