@@ -171,16 +171,16 @@ async def generate_icon(
         result_path = output_path
         generator.copy_base_image(result_path)
         
-        # レイヤー順序を解析（デフォルト: ['text', 'emoji', 'overlay']）
+        # レイヤー順序を解析（デフォルト: ['text', 'emoji', 'overlay1', 'overlay2', 'overlay3']）
         import json
         import base64
         try:
             if layer_order:
                 layer_order_list = json.loads(layer_order)
             else:
-                layer_order_list = ['text', 'emoji', 'overlay']
+                layer_order_list = ['text', 'emoji', 'overlay1', 'overlay2', 'overlay3']
         except:
-            layer_order_list = ['text', 'emoji', 'overlay']
+            layer_order_list = ['text', 'emoji', 'overlay1', 'overlay2', 'overlay3']
         
         print(f"Layer order: {layer_order_list}")
         
@@ -212,19 +212,29 @@ async def generate_icon(
                     flip_horizontal=emoji_flip_horizontal,
                     output_path=current_path
                 )
-            elif layer_type == 'overlay' and overlay_images:
-                # オーバーレイ画像を処理
-                print("Overlay images data received, processing...")
+            elif layer_type.startswith('overlay') and overlay_images:
+                # 特定のオーバーレイレイヤーを処理
+                print(f"Processing {layer_type} layer...")
                 current_result_path = current_path
                 try:
                     overlay_data = json.loads(overlay_images)
+                    # overlay1 -> slotNumber 1, overlay2 -> slotNumber 2, overlay3 -> slotNumber 3
+                    target_slot_number = int(layer_type.replace('overlay', ''))
+                    
+                    # 対応するスロット番号のオーバーレイを検索
+                    target_overlay = None
                     for overlay in overlay_data:
+                        if overlay.get('slotNumber') == target_slot_number:
+                            target_overlay = overlay
+                            break
+                    
+                    if target_overlay:
                         # オーバーレイ画像をbase64からデコードして保存
                         overlay_id = str(uuid.uuid4())
                         overlay_temp_path = os.path.join(UPLOAD_DIR, f"overlay_{overlay_id}.png")
                         
                         # base64データから画像ファイルを作成
-                        image_data = base64.b64decode(overlay['data'].split(',')[1])
+                        image_data = base64.b64decode(target_overlay['data'].split(',')[1])
                         with open(overlay_temp_path, "wb") as f:
                             f.write(image_data)
                         
@@ -232,23 +242,25 @@ async def generate_icon(
                         current_result_path = generator.add_overlay_image(
                             current_result_path, 
                             overlay_temp_path, 
-                            overlay['x'], 
-                            overlay['y'], 
-                            overlay['width'], 
-                            overlay['height'], 
-                            overlay['opacity'],
-                            overlay.get('rotation', 0),
-                            overlay.get('removeBackground', False),
-                            overlay.get('flipHorizontal', False),
+                            target_overlay['x'], 
+                            target_overlay['y'], 
+                            target_overlay['width'], 
+                            target_overlay['height'], 
+                            target_overlay['opacity'],
+                            target_overlay.get('rotation', 0),
+                            target_overlay.get('removeBackground', False),
+                            target_overlay.get('flipHorizontal', False),
                             current_result_path
                         )
                         
                         # 一時ファイルを削除
                         if os.path.exists(overlay_temp_path):
                             os.remove(overlay_temp_path)
+                    else:
+                        print(f"No overlay found for {layer_type} (slot {target_slot_number})")
                             
                 except Exception as e:
-                    print(f"Error processing overlay images: {e}")
+                    print(f"Error processing {layer_type}: {e}")
                 return current_result_path
             return current_path
         
