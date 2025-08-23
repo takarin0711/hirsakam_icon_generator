@@ -1527,10 +1527,11 @@ N: ${nCount}枚`);
     const hasDrawing = drawingCanvasRef.current && drawingHistory.length > 1; // 初期状態以外の履歴がある
     const hasOverlays = getAllOverlaySlots().length > 0;
     
-    if (!formData.text && !formData.emoji && !hasDrawing && !hasOverlays) {
-      alert('テキスト、絵文字、描画、またはオーバーレイ画像のいずれかを入力してください');
-      return;
-    }
+    // コンテンツなしでも画像生成を許可するため、このチェックを無効化
+    // if (!formData.text && !formData.emoji && !hasDrawing && !hasOverlays) {
+    //   alert('テキスト、絵文字、描画、またはオーバーレイ画像のいずれかを入力してください');
+    //   return;
+    // }
 
     setIsGenerating(true);
     setGeneratedImage(null);
