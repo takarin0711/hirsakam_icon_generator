@@ -268,9 +268,7 @@ async def generate_icon(
         for layer_type in layer_order_list:
             result_path = process_layer(layer_type, result_path)
         
-        # コンテンツが何もない場合のエラーチェック
-        if not text and not emoji and not drawing_data and not overlay_images:
-            raise HTTPException(status_code=400, detail="テキスト、絵文字、描画、またはオーバーレイ画像のいずれかを指定してください")
+        # コンテンツが何もない場合でもベース画像をそのまま生成できるようにする（エラーチェック削除）
 
         # 描画データがある場合は最後に合成（最上位レイヤー）
         if drawing_data:
@@ -759,7 +757,6 @@ async def share_to_slack(
         
         # 環境変数からSlack設定を取得
         slack_webhook_url = os.getenv("SLACK_WEBHOOK_URL")
-        slack_bot_icon = os.getenv("SLACK_BOT_ICON_URL", "")
         
         if not slack_webhook_url:
             raise HTTPException(status_code=400, detail="Slack Webhook URLが設定されていません。env/.envファイルでSLACK_WEBHOOK_URLを設定してください。")
@@ -842,7 +839,6 @@ async def share_generated_image_to_slack(
         
         # 環境変数からSlack設定を取得
         slack_webhook_url = os.getenv("SLACK_WEBHOOK_URL")
-        slack_bot_icon = os.getenv("SLACK_BOT_ICON_URL", "")
         
         if not slack_webhook_url:
             raise HTTPException(status_code=400, detail="Slack Webhook URLが設定されていません。env/.envファイルでSLACK_WEBHOOK_URLを設定してください。")

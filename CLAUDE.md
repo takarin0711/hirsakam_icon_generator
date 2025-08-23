@@ -68,7 +68,6 @@ SERVER_URL=http://your-server.com
 # Slack連携（オプション）
 SLACK_WEBHOOK_URL=https://your-workspace.slack.com/api/files.upload
 SLACK_DEFAULT_CHANNEL=#tmp-hirsakam-icon-generator
-SLACK_BOT_ICON_URL=https://your-icon-url.png
 ```
 
 ## 重要なファイル
