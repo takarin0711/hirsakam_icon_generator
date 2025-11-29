@@ -90,7 +90,28 @@ SERVER_URL=http://your-server.com
 # SERVER_URL=http://localhost        # ローカル開発
 # SERVER_URL=http://your-server.com  # 本番環境
 # SERVER_URL=*                       # 全オリジン許可（テスト用のみ）
+
+# Slack連携設定（オプション）
+# 新しいSlack API (files_upload_v2) を使用
+# Bot Token (xoxb-で始まる) が必要
+# 必要なスコープ: files:write, chat:write
+SLACK_BOT_TOKEN=xoxb-your-bot-token-here
+SLACK_DEFAULT_CHANNEL=#tmp-hirsakam-icon-generator
 ```
+
+### Slack連携のセットアップ
+
+Slack連携機能を使用する場合は、以下の手順でBot Tokenを取得してください:
+
+1. [Slack API Apps](https://api.slack.com/apps) でアプリを作成
+2. **OAuth & Permissions** で以下のスコープを追加:
+   - `files:write` - ファイルアップロード権限
+   - `chat:write` - メッセージ送信権限
+3. **Install to Workspace** でワークスペースにインストール
+4. **Bot User OAuth Token** (xoxb-で始まる) をコピーして`env/.env`に設定
+5. Slackでチャンネルに `/invite @your-bot-name` でBotを招待
+
+**詳細な手順**: [SLACK_MIGRATION.md](SLACK_MIGRATION.md) を参照してください。
 
 **設定手順**:
 1. `env/.env` ファイルを編集
@@ -296,7 +317,9 @@ cd frontend && npm start
    - **高画質送信**: dom-to-imageライブラリによる高品質スクリーンショット（ガチャ）＋直接画像送信（生成画像）
    - **投稿設定**: 投稿先チャンネルを自由に設定
    - **送信状況表示**: 成功・失敗をリアルタイムでフィードバック
-   - **環境変数設定**: `env/.env`でSlack Webhook URLを設定
+   - **新API対応**: Slack新API `files_upload_v2` を使用（2025年11月12日のEOL対応済み）
+   - **環境変数設定**: `env/.env`でSlack Bot Token (xoxb-) を設定
+   - **セットアップ手順**: 詳細は [SLACK_MIGRATION.md](SLACK_MIGRATION.md) を参照
 12. 生成された画像をダウンロード・Slack共有
 
 ## 💡 ファイル構成の説明

@@ -752,71 +752,59 @@ async def share_to_slack(
     Slackにガチャ結果のスクリーンショットを共有
     """
     try:
-        import subprocess
-        import json
-        
-        # 環境変数からSlack設定を取得
-        slack_webhook_url = os.getenv("SLACK_WEBHOOK_URL")
-        
-        if not slack_webhook_url:
-            raise HTTPException(status_code=400, detail="Slack Webhook URLが設定されていません。env/.envファイルでSLACK_WEBHOOK_URLを設定してください。")
-        
+        from slack_sdk import WebClient
+        from slack_sdk.errors import SlackApiError
+
+        # 環境変数からSlack Bot Tokenを取得
+        slack_bot_token = os.getenv("SLACK_BOT_TOKEN")
+
+        if not slack_bot_token:
+            raise HTTPException(status_code=400, detail="Slack Bot Tokenが設定されていません。env/.envファイルでSLACK_BOT_TOKENを設定してください。")
+
         # スクリーンショットを一時保存
         screenshot_id = str(uuid.uuid4())
         screenshot_path = os.path.join(UPLOAD_DIR, f"slack_screenshot_{screenshot_id}.png")
-        
+
         with open(screenshot_path, "wb") as buffer:
             shutil.copyfileobj(screenshot.file, buffer)
-        
+
         print(f"スクリーンショットを一時保存: {screenshot_path}")
-        
-        # Slackにスクリーンショット付きメッセージを送信
-        # files.upload APIを使用してファイル送信
-        files_upload_url = slack_webhook_url.replace('/chat.postMessage', '/files.upload')
-        
-        curl_command = [
-            'curl',
-            '-F', f'file=@{screenshot_path}',
-            '-F', f'initial_comment={message}',
-            '-F', f'channels={channel}',
-            files_upload_url
-        ]
-        
-        print(f"Slack送信コマンド: {' '.join(curl_command)}")
-        
-        # curlコマンドを実行
-        result = subprocess.run(
-            curl_command,
-            capture_output=True,
-            text=True,
-            timeout=30
+
+        # Slack WebClientを初期化
+        client = WebClient(token=slack_bot_token)
+
+        # 新しいfiles_upload_v2メソッドでファイル送信
+        print(f"Slack送信開始: channel={channel}, message={message}")
+
+        response = client.files_upload_v2(
+            channel=channel,
+            file=screenshot_path,
+            title="Hirsakam ガチャ結果",
+            initial_comment=message
         )
-        
+
         # 一時ファイルを削除
         if os.path.exists(screenshot_path):
             os.remove(screenshot_path)
             print(f"一時ファイルを削除: {screenshot_path}")
-        
-        if result.returncode == 0:
-            print(f"Slack送信成功: {result.stdout}")
-            return {
-                "success": True,
-                "message": "Slackに正常に送信されました",
-                "channel": channel,
-                "response": result.stdout
-            }
-        else:
-            print(f"Slack送信失敗: {result.stderr}")
-            raise HTTPException(
-                status_code=500, 
-                detail=f"Slack送信に失敗しました: {result.stderr}"
-            )
-            
-    except subprocess.TimeoutExpired:
-        # タイムアウト時も一時ファイルを削除
+
+        print(f"Slack送信成功: {response}")
+        return {
+            "success": True,
+            "message": "Slackに正常に送信されました",
+            "channel": channel,
+            "response": str(response)
+        }
+
+    except SlackApiError as e:
+        # Slack API エラー時も一時ファイルを削除
         if 'screenshot_path' in locals() and os.path.exists(screenshot_path):
             os.remove(screenshot_path)
-        raise HTTPException(status_code=500, detail="Slack送信がタイムアウトしました")
+        print(f"Slack API エラー: {e.response['error']}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Slack送信に失敗しました: {e.response['error']}"
+        )
     except Exception as e:
         # エラー時も一時ファイルを削除
         if 'screenshot_path' in locals() and os.path.exists(screenshot_path):
@@ -834,64 +822,52 @@ async def share_generated_image_to_slack(
     生成済み画像をSlackに共有
     """
     try:
-        import subprocess
-        import json
-        
-        # 環境変数からSlack設定を取得
-        slack_webhook_url = os.getenv("SLACK_WEBHOOK_URL")
-        
-        if not slack_webhook_url:
-            raise HTTPException(status_code=400, detail="Slack Webhook URLが設定されていません。env/.envファイルでSLACK_WEBHOOK_URLを設定してください。")
-        
+        from slack_sdk import WebClient
+        from slack_sdk.errors import SlackApiError
+
+        # 環境変数からSlack Bot Tokenを取得
+        slack_bot_token = os.getenv("SLACK_BOT_TOKEN")
+
+        if not slack_bot_token:
+            raise HTTPException(status_code=400, detail="Slack Bot Tokenが設定されていません。env/.envファイルでSLACK_BOT_TOKENを設定してください。")
+
         # 生成画像のファイルパスを構築
         # image_path は "/download/image_xxx.jpg" 形式なので、実際のファイルパスに変換
         filename = image_path.split('/')[-1]  # "image_xxx.jpg"
         actual_image_path = os.path.join("..", "output", filename)
-        
+
         if not os.path.exists(actual_image_path):
             raise HTTPException(status_code=404, detail=f"画像ファイルが見つかりません: {filename}")
-        
+
         print(f"生成画像を送信: {actual_image_path}")
-        
-        # Slackに画像付きメッセージを送信
-        # files.upload APIを使用してファイル送信
-        files_upload_url = slack_webhook_url.replace('/chat.postMessage', '/files.upload')
-        
-        curl_command = [
-            'curl',
-            '-F', f'file=@{actual_image_path}',
-            '-F', f'initial_comment={message}',
-            '-F', f'channels={channel}',
-            files_upload_url
-        ]
-        
-        print(f"Slack送信コマンド: {' '.join(curl_command)}")
-        
-        # curlコマンドを実行
-        result = subprocess.run(
-            curl_command,
-            capture_output=True,
-            text=True,
-            timeout=30
+
+        # Slack WebClientを初期化
+        client = WebClient(token=slack_bot_token)
+
+        # 新しいfiles_upload_v2メソッドでファイル送信
+        print(f"Slack送信開始: channel={channel}, message={message}")
+
+        response = client.files_upload_v2(
+            channel=channel,
+            file=actual_image_path,
+            title="Hirsakam 生成画像",
+            initial_comment=message
         )
-        
-        if result.returncode == 0:
-            print(f"Slack送信成功: {result.stdout}")
-            return {
-                "success": True,
-                "message": "Slackに正常に送信されました",
-                "channel": channel,
-                "response": result.stdout
-            }
-        else:
-            print(f"Slack送信失敗: {result.stderr}")
-            raise HTTPException(
-                status_code=500, 
-                detail=f"Slack送信に失敗しました: {result.stderr}"
-            )
-            
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=500, detail="Slack送信がタイムアウトしました")
+
+        print(f"Slack送信成功: {response}")
+        return {
+            "success": True,
+            "message": "Slackに正常に送信されました",
+            "channel": channel,
+            "response": str(response)
+        }
+
+    except SlackApiError as e:
+        print(f"Slack API エラー: {e.response['error']}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Slack送信に失敗しました: {e.response['error']}"
+        )
     except Exception as e:
         print(f"Slack送信エラー: {e}")
         raise HTTPException(status_code=500, detail=str(e))

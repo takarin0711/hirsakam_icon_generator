@@ -66,7 +66,10 @@ cd frontend && npm run build
 SERVER_URL=http://your-server.com
 
 # Slack連携（オプション）
-SLACK_WEBHOOK_URL=https://your-workspace.slack.com/api/files.upload
+# 新しいSlack API (files_upload_v2) を使用
+# Bot Token (xoxb-で始まる) が必要
+# 必要なスコープ: files:write, chat:write
+SLACK_BOT_TOKEN=xoxb-your-bot-token-here
 SLACK_DEFAULT_CHANNEL=#tmp-hirsakam-icon-generator
 ```
 
@@ -92,7 +95,11 @@ SLACK_DEFAULT_CHANNEL=#tmp-hirsakam-icon-generator
 ### よくある問題
 1. **ポート競合**: `lsof -i :3000` または `lsof -i :8000` でプロセス確認
 2. **依存関係エラー**: 仮想環境を再作成 `rm -rf backend/venv && python3 -m venv backend/venv`
-3. **Slack送信エラー**: `env/.env` ファイルのSLACK_WEBHOOK_URL設定を確認
+3. **Slack送信エラー**: `env/.env` ファイルのSLACK_BOT_TOKEN設定を確認
+   - Bot Token (xoxb-で始まる) が正しく設定されているか
+   - 必要なスコープ (files:write, chat:write) が付与されているか
+   - Botがチャンネルに招待されているか (`/invite @your-bot-name`)
+   - 詳細は [SLACK_MIGRATION.md](SLACK_MIGRATION.md) を参照
 4. **スクリーンショット品質**: dom-to-imageライブラリ使用、html2canvasから変更済み
 
 ### デバッグ方法
@@ -112,12 +119,13 @@ SLACK_DEFAULT_CHANNEL=#tmp-hirsakam-icon-generator
 
 ### ✅ エンターテイメント
 - **ガチャ機能**: 4段階レアリティ(N/R/SR/SSR)、1回&10連ガチャ
-- **Slack連携**: ガチャ結果、生成画像のSlack共有
+- **Slack連携**: ガチャ結果、生成画像のSlack共有 (新API `files_upload_v2` 対応)
 
 ### ✅ 技術的改善
 - **画像品質改善**: dom-to-imageライブラリ採用で高品質スクリーンショット
 - **環境変数統一**: env/.envファイルで設定一元管理
 - **自動画像圧縮**: アップロード時の自動リサイズ&品質最適化
+- **Slack API移行**: 新しい`files_upload_v2` APIに対応 (2025年11月12日のEOL対応済み)
 
 ## 機能詳細
 
@@ -157,3 +165,33 @@ SLACK_DEFAULT_CHANNEL=#tmp-hirsakam-icon-generator
 - **レイヤー順序**: `layerOrder`配列でフロントエンドからバックエンドに送信
 - **画像スケーリング**: `imageScale`でプレビューと生成時の座標変換
 - **base64传送**: オーバーレイ画像はbase64エンコードでバックエンドに送信
+- **Slack連携**: `slack-sdk`ライブラリの`files_upload_v2()`メソッドで新API対応
+
+### Slack連携の実装詳細
+Slack API移行（2025年11月12日のEOL対応）により、以下の変更を実施:
+
+#### 旧実装 (廃止予定)
+```python
+# curlコマンドで直接files.upload APIを呼び出し
+curl -F file=@path -F channels=#channel SLACK_WEBHOOK_URL
+```
+
+#### 新実装 (現在の実装)
+```python
+from slack_sdk import WebClient
+
+client = WebClient(token=os.getenv("SLACK_BOT_TOKEN"))
+response = client.files_upload_v2(
+    channel=channel,
+    file=file_path,
+    title="タイトル",
+    initial_comment=message
+)
+```
+
+**必要な設定:**
+- 環境変数: `SLACK_BOT_TOKEN` (xoxb-で始まるBot User OAuth Token)
+- OAuth Scopes: `files:write`, `chat:write`
+- Botをチャンネルに招待: `/invite @bot-name`
+
+**詳細なセットアップ手順:** [SLACK_MIGRATION.md](SLACK_MIGRATION.md) を参照
